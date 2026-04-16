@@ -146,8 +146,9 @@ def init_db():
         conn.executemany(
             "INSERT OR IGNORE INTO settings(key,value,label) VALUES(?,?,?)",
             [
-                ("order_prefix", "B",    "工單號碼前置字元"),
-                ("order_seq_digits", "5", "流水號位數"),
+                ("order_front",  "B",        "前碼（最多4碼）"),
+                ("order_middle", "2026",     "中碼（最多8碼）"),
+                ("order_suffix_digits", "5", "後碼流水號位數"),
             ]
         )
         # Seed 預設配件（只在首次建立時插入）
@@ -929,16 +930,21 @@ def update_setting(key):
 
 
 def generate_order_id() -> str:
-    """產生 {prefix}{YYYY}{NNNNN} 格式工單號，例：B202600001"""
-    db     = get_db()
+    """
+    產生 前碼(≤4碼) + 中碼(≤8碼) + 後碼(流水號) 格式工單號
+    例：前碼=B, 中碼=20260416, 後碼5位 → B2026041600001
+    """
+    db = get_db()
     def _get(key, default):
         row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         return row[0] if row else default
 
-    prefix = _get("order_prefix", "B").strip() or "B"
-    digits = max(1, min(10, int(_get("order_seq_digits", "5") or 5)))
-    year   = datetime.now().strftime("%Y")
-    pattern = f"{prefix}{year}%"
+    front  = (_get("order_front", "B").strip() or "B")[:4]
+    middle = (_get("order_middle", "2026").strip() or "")[:8]
+    digits = max(1, min(10, int(_get("order_suffix_digits", "5") or 5)))
+
+    prefix = f"{front}{middle}"
+    pattern = f"{prefix}%"
 
     row = db.execute(
         "SELECT order_id FROM orders WHERE order_id LIKE ? ORDER BY order_id DESC LIMIT 1",
@@ -946,12 +952,12 @@ def generate_order_id() -> str:
     ).fetchone()
     if row:
         try:
-            seq = int(row["order_id"][len(prefix) + 4:]) + 1
+            seq = int(row["order_id"][len(prefix):]) + 1
         except (ValueError, IndexError):
             seq = 1
     else:
         seq = 1
-    return f"{prefix}{year}{seq:0{digits}d}"
+    return f"{prefix}{seq:0{digits}d}"
 
 
 # ══════════════════════════════════════════════════════════════

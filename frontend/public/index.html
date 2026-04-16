@@ -406,31 +406,50 @@ textarea { min-height:70px; resize:vertical; }
 
     <!-- SETTINGS -->
     <div class="view" id="v-settings">
-      <div style="max-width:680px">
+      <div style="max-width:720px">
         <div class="card" style="margin-bottom:14px">
-          <div class="card-hd"><span class="card-title">工單號碼設定</span></div>
+          <div class="card-hd"><span class="card-title">工單號碼定義</span></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:18px">
 
-            <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:500;margin-bottom:2px">工單號碼前置字元</div>
-                <div style="font-size:12px;color:var(--text3)">建立工單時號碼的開頭字元，例：B、W、A</div>
-              </div>
-              <input id="stg-order_prefix" maxlength="5"
-                     style="width:90px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);letter-spacing:.1em;padding:10px;border:2px solid var(--border2);border-radius:8px"
-                     oninput="refreshOrderIdPreview()">
-              <button class="btn btn-p" onclick="saveSetting('order_prefix')">儲存</button>
+            <div style="background:var(--blue-bg);border:1px solid #b8d4f0;border-radius:10px;padding:12px 16px;font-size:12px;color:var(--blue);line-height:1.7">
+              <strong>工單號碼格式：</strong>前碼 ＋ 中碼 ＋ 後碼（流水號）<br>
+              三段串聯產生唯一工單號碼。修改前碼或中碼後，流水號會從 1 重新開始計算。
             </div>
 
+            <!-- 前碼 -->
             <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
               <div style="flex:1">
-                <div style="font-size:13px;font-weight:500;margin-bottom:2px">流水號位數</div>
-                <div style="font-size:12px;color:var(--text3)">年份後面的流水號長度，例：5 → 00001</div>
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">前碼（最多 4 碼）</div>
+                <div style="font-size:12px;color:var(--text3)">工單號碼的開頭識別碼，例：B、WO、INST</div>
               </div>
-              <input id="stg-order_seq_digits" type="number" min="3" max="8"
+              <input id="stg-order_front" maxlength="4"
+                     style="width:120px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);letter-spacing:.1em;padding:10px;border:2px solid var(--border2);border-radius:8px"
+                     oninput="refreshOrderIdPreview()">
+              <button class="btn btn-p" onclick="saveSetting('order_front')">儲存</button>
+            </div>
+
+            <!-- 中碼 -->
+            <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">中碼（最多 8 碼）</div>
+                <div style="font-size:12px;color:var(--text3)">中間識別碼，可填年份、日期、部門代碼等，例：2026、20260416</div>
+              </div>
+              <input id="stg-order_middle" maxlength="8"
+                     style="width:160px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);letter-spacing:.06em;padding:10px;border:2px solid var(--border2);border-radius:8px"
+                     oninput="refreshOrderIdPreview()">
+              <button class="btn btn-p" onclick="saveSetting('order_middle')">儲存</button>
+            </div>
+
+            <!-- 後碼 -->
+            <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">後碼流水號位數</div>
+                <div style="font-size:12px;color:var(--text3)">自動遞增的流水號長度，例：5 → 00001</div>
+              </div>
+              <input id="stg-order_suffix_digits" type="number" min="3" max="8"
                      style="width:90px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);padding:10px;border:2px solid var(--border2);border-radius:8px"
                      oninput="refreshOrderIdPreview()">
-              <button class="btn btn-p" onclick="saveSetting('order_seq_digits')">儲存</button>
+              <button class="btn btn-p" onclick="saveSetting('order_suffix_digits')">儲存</button>
             </div>
 
           </div>
@@ -440,8 +459,8 @@ textarea { min-height:70px; resize:vertical; }
           <div class="card-hd"><span class="card-title">工單號碼即時預覽</span></div>
           <div class="card-body" style="display:flex;align-items:center;gap:24px">
             <div>
-              <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:var(--blue);letter-spacing:.06em" id="order-id-preview">—</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:4px">前置字元 ＋ 西元年 ＋ 流水號</div>
+              <div style="font-size:30px;font-weight:700;font-family:var(--mono);color:var(--blue);letter-spacing:.06em" id="order-id-preview">—</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:4px">前碼 ＋ 中碼 ＋ 後碼（流水號）</div>
             </div>
             <div style="font-size:13px;color:var(--text2);border-left:2px solid var(--border);padding-left:20px;line-height:2">
               <div id="preview-breakdown"></div>
@@ -1362,18 +1381,18 @@ async function saveSetting(key){
 }
 
 function refreshOrderIdPreview(){
-  const prefix = (document.getElementById('stg-order_prefix')?.value||'B').trim()||'B';
-  const digits = Math.max(1, parseInt(document.getElementById('stg-order_seq_digits')?.value||'5')||5);
-  const year   = new Date().getFullYear();
+  const front  = (document.getElementById('stg-order_front')?.value||'B').trim()||'B';
+  const middle = (document.getElementById('stg-order_middle')?.value||'').trim();
+  const digits = Math.max(1, Math.min(8, parseInt(document.getElementById('stg-order_suffix_digits')?.value||'5')||5));
   const seq    = '1'.padStart(digits, '0');
-  const preview = `${prefix}${year}${seq}`;
+  const preview = `${front}${middle}${seq}`;
   const el = document.getElementById('order-id-preview');
   const bd = document.getElementById('preview-breakdown');
   if(el) el.textContent = preview;
   if(bd) bd.innerHTML =
-    `<div><span style="color:var(--blue);font-weight:600">${prefix}</span> ← 前置字元（${prefix.length} 碼）</div>`+
-    `<div><span style="color:var(--green);font-weight:600">${year}</span> ← 西元年（4 碼）</div>`+
-    `<div><span style="color:var(--amber);font-weight:600">${seq}</span> ← 流水號（${digits} 碼）</div>`+
+    `<div><span style="color:var(--blue);font-weight:600">${front}</span> ← 前碼（${front.length} 碼）</div>`+
+    (middle ? `<div><span style="color:var(--green);font-weight:600">${middle}</span> ← 中碼（${middle.length} 碼）</div>` : `<div style="color:var(--text3)">（中碼未設定）</div>`)+
+    `<div><span style="color:var(--amber);font-weight:600">${seq}</span> ← 後碼流水號（${digits} 碼）</div>`+
     `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">總長度：${preview.length} 碼</div>`;
 }
 
