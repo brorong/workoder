@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Env & secrets
+.env
+*.env
+
+# Database (persistent data, managed by Railway volume)
+install.db
+*.db-shm
+*.db-wal
+
+# Uploads (user photos)
+uploads/
+
+# Logs
+app.log
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/

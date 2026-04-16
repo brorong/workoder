@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配件安裝系統 — 派工管理後台</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --surface2: #f8f9fb;
+  --border: #e3e6ec; --border2: #cdd1db;
+  --text: #1a1d23; --text2: #5a6175; --text3: #9aa0b2;
+  --blue: #185FA5; --blue-bg: #e8f1fb; --blue-mid: #378ADD;
+  --green: #2d7a4f; --green-bg: #e6f4ed;
+  --amber: #8a5a00; --amber-bg: #fef3d8;
+  --red: #a02020; --red-bg: #fdeaea;
+  --purple: #5b3fac; --purple-bg: #f0ecff;
+  --radius: 10px; --mono: 'JetBrains Mono', monospace;
+  --sans: 'Noto Sans TC', system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; }
+/* Sidebar */
+.sidebar { position: fixed; top:0; left:0; width:220px; height:100vh; background: var(--surface); border-right: 1px solid var(--border); display:flex; flex-direction:column; z-index:100; }
+.logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+.logo-title { font-size:15px; font-weight:700; color:var(--text); }
+.logo-sub { font-size:11px; color:var(--text3); margin-top:2px; }
+.nav { padding: 12px 10px; flex:1; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text2); margin-bottom:2px; border:none; background:none; width:100%; text-align:left; }
+.nav-item:hover { background:var(--bg); color:var(--text); }
+.nav-item.active { background:var(--blue-bg); color:var(--blue); font-weight:500; }
+.nav-icon { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0; }
+.sidebar-footer { padding:14px 16px; border-top:1px solid var(--border); font-size:12px; color:var(--text3); }
+/* Main */
+.main { margin-left:220px; min-height:100vh; }
+.topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 28px; height:56px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; }
+.page-title { font-size:16px; font-weight:500; }
+.content { padding:28px; }
+/* Views */
+.view { display:none; } .view.active { display:block; }
+/* Stats */
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+.stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; }
+.stat-n { font-size:26px; font-weight:700; font-family:var(--mono); }
+.stat-l { font-size:12px; color:var(--text2); margin-top:3px; }
+/* Card */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+.card-hd { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.card-title { font-size:14px; font-weight:500; }
+.card-body { padding:20px; }
+/* Table */
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { padding:10px 14px; text-align:left; font-size:11px; font-weight:500; color:var(--text3); letter-spacing:.06em; text-transform:uppercase; border-bottom:1px solid var(--border); white-space:nowrap; }
+.tbl td { padding:12px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tr:hover td { background:var(--surface2); }
+/* Badge */
+.badge { display:inline-flex; align-items:center; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:500; white-space:nowrap; }
+.b-wait  { background:var(--amber-bg); color:var(--amber); }
+.b-pend  { background:var(--blue-bg);  color:var(--blue); }
+.b-work  { background:var(--purple-bg);color:var(--purple); }
+.b-rev   { background:#fff3cd; color:#7a5800; }
+.b-done  { background:var(--green-bg); color:var(--green); }
+.b-rej   { background:var(--red-bg);   color:var(--red); }
+/* Form */
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-grid.g3 { grid-template-columns:1fr 1fr 1fr; }
+.fg { display:flex; flex-direction:column; gap:5px; }
+.fg.full { grid-column:1/-1; }
+label { font-size:12px; font-weight:500; color:var(--text2); }
+input,select,textarea { font-family:var(--sans); font-size:13px; padding:9px 12px; border:1px solid var(--border2); border-radius:8px; background:var(--surface); color:var(--text); width:100%; transition:border .15s; }
+input:focus,select:focus,textarea:focus { outline:none; border-color:var(--blue-mid); box-shadow:0 0 0 3px rgba(55,138,221,.12); }
+textarea { min-height:70px; resize:vertical; }
+/* Checkbox grid */
+.acc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+.acc-item { display:flex; align-items:center; gap:7px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:12px; user-select:none; }
+.acc-item:hover { border-color:var(--blue-mid); }
+.acc-item.on { border-color:var(--blue); background:var(--blue-bg); color:var(--blue); }
+.acc-item input { width:auto; margin:0; }
+/* Btn */
+.btn { padding:9px 18px; border-radius:8px; font-size:13px; font-family:var(--sans); cursor:pointer; border:1px solid var(--border2); background:var(--surface); color:var(--text); font-weight:500; }
+.btn:hover { background:var(--surface2); }
+.btn-p { background:var(--blue); color:#fff; border-color:var(--blue); }
+.btn-p:hover { background:#145090; }
+.btn-sm { padding:5px 12px; font-size:12px; }
+.btn-row { display:flex; gap:8px; flex-wrap:wrap; }
+/* Modal */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:center; justify-content:center; z-index:200; }
+.overlay.open { display:flex; }
+.modal { background:var(--surface); border-radius:14px; width:480px; max-width:92vw; }
+.modal-hd { padding:18px 22px; border-bottom:1px solid var(--border); font-size:15px; font-weight:500; display:flex; justify-content:space-between; align-items:center; }
+.modal-body { padding:22px; }
+.modal-ft { padding:14px 22px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+/* Link box */
+.link-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px; margin-top:10px; }
+.link-box code { flex:1; font-family:var(--mono); font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Notify panel */
+.notify-log { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; max-height:200px; overflow-y:auto; font-size:12px; color:var(--text2); font-family:var(--mono); }
+.nl-item { padding:3px 0; border-bottom:1px solid var(--border); }
+.nl-item:last-child { border:none; }
+.nl-ok { color:var(--green); }
+.nl-fail { color:var(--red); }
+/* Toast */
+#toast { position:fixed; bottom:28px; right:28px; background:var(--text); color:#fff; padding:12px 20px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:999; max-width:300px; }
+#toast.show { opacity:1; }
+/* Photo grid */
+.photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
+.photo-thumb { aspect-ratio:4/3; border-radius:8px; object-fit:cover; border:1px solid var(--border); cursor:pointer; }
+.photo-label { font-size:11px; color:var(--text3); text-align:center; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-title">配件安裝系統</div>
+    <div class="logo-sub">派工管理後台</div>
+  </div>
+  <nav class="nav">
+    <button class="nav-item active" onclick="nav('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      總覽
+    </button>
+    <button class="nav-item" onclick="nav('create',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      建立工單
+    </button>
+    <button class="nav-item" onclick="nav('orders',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      工單列表
+    </button>
+    <button class="nav-item" onclick="nav('gallery',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      完工圖庫
+    </button>
+    <button class="nav-item" onclick="nav('notify',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      通知紀錄
+    </button>
+    <button class="nav-item" onclick="nav('users',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      人員管理
+    </button>
+    <button class="nav-item" onclick="nav('accessories',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      配件管理
+    </button>
+    <button class="nav-item" onclick="nav('settings',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      參數維護
+    </button>
+    <button class="nav-item" id="nav-accounts" onclick="nav('accounts',this)" style="display:none">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="16" r="1"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      帳號管理
+    </button>
+  </nav>
+  <div class="sidebar-footer" style="display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span id="sidebar-user" style="font-size:12px;font-weight:500;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">未登入</span>
+      <span id="sidebar-role" class="badge" style="font-size:10px;padding:2px 7px"></span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" style="flex:1;padding:3px 0;font-size:11px" onclick="openChangePassword()">改密碼</button>
+      <button class="btn btn-sm" style="flex:1;padding:3px 0;font-size:11px;color:var(--red)" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div class="page-title" id="page-title">總覽</div>
+    <div class="btn-row">
+      <button class="btn btn-sm" onclick="exportExcel()">匯出 Excel</button>
+      <button class="btn btn-sm btn-p" onclick="nav('create', document.querySelectorAll('.nav-item')[1])">+ 新建工單</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div class="view active" id="v-dashboard">
+      <div class="stats" id="stat-cards">
+        <div class="stat"><div class="stat-n" id="s-total">—</div><div class="stat-l">本月工單</div></div>
+        <div class="stat"><div class="stat-n" style="color:var(--amber)" id="s-wait">—</div><div class="stat-l">待派工</div></div>
+        <div class="stat"><div class="stat-n" style="color:var(--purple)" id="s-work">—</div><div class="stat-l">施工中</div></div>
+        <div class="stat"><div class="stat-n" style="color:var(--green)" id="s-done">—</div><div class="stat-l">已完成</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">最近工單</span></div>
+        <div style="overflow-x:auto"><table class="tbl" id="dash-table"><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- CREATE -->
+    <div class="view" id="v-create">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">建立新工單</span></div>
+        <div class="card-body">
+          <div style="margin-bottom:16px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">來源與車輛資訊</div>
+          <div class="form-grid g3" style="margin-bottom:14px">
+            <div class="fg"><label>業務 / 來源</label><input id="f-source" placeholder="如：王業務"></div>
+            <div class="fg"><label>車牌號碼 *</label><input id="f-car-no" placeholder="ABC-1234"></div>
+            <div class="fg"><label>引擎號碼</label><input id="f-engine-no" placeholder="AB123456"></div>
+          </div>
+          <div class="form-grid g3" style="margin-bottom:14px">
+            <div class="fg"><label>車型</label><input id="f-car-type" placeholder="如：轎車、SUV、貨車..."></div>
+            <div class="fg"><label>安裝地點</label><input id="f-location" placeholder="如：台北倉儲中心"></div>
+            <div class="fg"><label>預計安裝日期</label><input type="date" id="f-date"></div>
+          </div>
+          <div class="form-grid g3" style="margin-bottom:20px">
+            <div class="fg"><label>預計到車日</label><input type="date" id="f-arrival-date"></div>
+            <div class="fg"><label>預計交車日</label><input type="date" id="f-delivery-date"></div>
+          </div>
+
+          <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">安裝配件（多選，連動施工端拍照清單）</div>
+          <div class="acc-grid" id="acc-grid" style="margin-bottom:16px">
+            <span style="color:var(--text3);font-size:12px">載入中...</span>
+          </div>
+
+          <div class="fg" style="margin-bottom:20px"><label>特別要求 / 備註</label><textarea id="f-note" placeholder="特殊走線、安裝位置說明..."></textarea></div>
+
+          <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">指派技師（可稍後再派）</div>
+          <div class="form-grid" style="margin-bottom:20px">
+            <div class="fg"><label>技師姓名</label><select id="f-installer"><option value="">先建立工單，稍後指派</option></select></div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-p" onclick="submitOrder()">建立工單並發送通知</button>
+            <button class="btn" onclick="clearForm()">清除</button>
+          </div>
+
+          <div id="create-result" style="display:none;margin-top:16px;padding:14px 16px;background:var(--green-bg);border:1px solid #b2d9c1;border-radius:10px;font-size:13px;color:var(--green)">
+            <div style="font-weight:500;margin-bottom:8px" id="cr-msg"></div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;background:#fff;border:1px solid #b2d9c1;border-radius:8px">
+              <span style="font-size:12px;color:var(--text3);white-space:nowrap">工單號碼</span>
+              <code id="cr-order-id" style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--blue);letter-spacing:.05em;flex:1"></code>
+              <button class="btn btn-sm" onclick="navigator.clipboard?.writeText(document.getElementById('cr-order-id').textContent);toast('工單號碼已複製')">複製號碼</button>
+            </div>
+            <div class="link-box" id="cr-link-box" style="display:none">
+              <code id="cr-link"></code>
+              <button class="btn btn-sm" onclick="copyLink()">複製連結</button>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:var(--text3)">LINE 與 Email 通知已自動發送</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDERS -->
+    <div class="view" id="v-orders">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-body" style="padding:16px 20px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:flex-end">
+            <div class="fg">
+              <label>工單號碼</label>
+              <input id="f-order-id" placeholder="ORD..." oninput="loadOrders()">
+            </div>
+            <div class="fg">
+              <label>車牌號碼</label>
+              <input id="f-search-car" placeholder="ABC-1234" oninput="loadOrders()">
+            </div>
+            <div class="fg">
+              <label>建立日期（起）</label>
+              <input type="date" id="f-date-from" onchange="loadOrders()">
+            </div>
+            <div class="fg">
+              <label>建立日期（迄）</label>
+              <input type="date" id="f-date-to" onchange="loadOrders()">
+            </div>
+            <div style="display:flex;gap:8px">
+              <select id="status-filter" onchange="loadOrders()" style="font-size:12px;padding:9px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text)">
+                <option value="">全部狀態</option>
+                <option>待派工</option><option>待確認</option><option>施工中</option>
+                <option>待審核</option><option>已完成</option><option>退回</option>
+              </select>
+              <button class="btn" onclick="clearOrderSearch()">清除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">工單列表</span>
+          <span id="orders-count" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl" id="orders-table"><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- GALLERY -->
+    <div class="view" id="v-gallery">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">完工圖庫</span></div>
+        <div class="card-body">
+          <div class="form-grid" style="margin-bottom:16px">
+            <div class="fg"><label>工單編號</label><input id="g-order-id" placeholder="ORD..."></div>
+            <div style="display:flex;align-items:flex-end;gap:8px"><button class="btn btn-p" onclick="loadPhotos()">查詢照片</button></div>
+          </div>
+          <div id="gallery-area"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFY -->
+    <div class="view" id="v-notify">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">通知紀錄</span></div>
+        <div class="card-body">
+          <div class="notify-log" id="notify-log">
+            <div class="nl-item">通知紀錄將在本次 session 內顯示於此...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="view" id="v-users">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">人員列表</span>
+          <button class="btn btn-sm btn-p" onclick="openUserModal()">+ 新增人員</button>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl" id="users-table"><tbody></tbody></table></div>
+      </div>
+    </div>
+
+
+    <!-- ORDER DETAIL -->
+    <div class="view" id="v-order-detail">
+      <!-- 頂部麵包屑 -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+        <button class="btn btn-sm" onclick="nav('orders',document.querySelectorAll('.nav-item')[2])">← 返回列表</button>
+        <span style="color:var(--text3);font-size:13px">工單維護</span>
+        <code id="od-order-id" style="font-family:var(--mono);font-size:13px;color:var(--blue)"></code>
+        <span id="od-status-badge"></span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start">
+        <!-- 左欄：可編輯工單資訊 -->
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-hd">
+              <span class="card-title">基本資訊</span>
+              <button class="btn btn-sm btn-p" id="od-save-btn" onclick="saveOrderDetail()">儲存變更</button>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+                <span style="font-size:12px;color:var(--text3);white-space:nowrap">工單號碼</span>
+                <code id="od-order-id-field" style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue);letter-spacing:.05em;flex:1"></code>
+                <button class="btn btn-sm" onclick="navigator.clipboard?.writeText(document.getElementById('od-order-id-field').textContent);toast('工單號碼已複製')">複製</button>
+              </div>
+              <div class="form-grid g3" style="margin-bottom:14px">
+                <div class="fg"><label>業務 / 來源</label><input id="od-source"></div>
+                <div class="fg"><label>車牌號碼 *</label><input id="od-car-no"></div>
+                <div class="fg"><label>引擎號碼</label><input id="od-engine-no"></div>
+              </div>
+              <div class="form-grid g3" style="margin-bottom:14px">
+                <div class="fg"><label>車型</label><input id="od-car-type" placeholder="如：轎車、SUV..."></div>
+                <div class="fg"><label>安裝地點</label><input id="od-location"></div>
+                <div class="fg"><label>預計安裝日期</label><input type="date" id="od-install-date"></div>
+              </div>
+              <div class="form-grid g3" style="margin-bottom:14px">
+                <div class="fg"><label>預計到車日</label><input type="date" id="od-arrival-date"></div>
+                <div class="fg"><label>預計交車日</label><input type="date" id="od-delivery-date"></div>
+              </div>
+              <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">安裝配件</div>
+              <div class="acc-grid" id="od-acc-grid" style="margin-bottom:14px"></div>
+              <div class="fg"><label>特別要求 / 備註</label><textarea id="od-note"></textarea></div>
+            </div>
+          </div>
+
+          <!-- 照片 -->
+          <div class="card">
+            <div class="card-hd"><span class="card-title">施工照片</span></div>
+            <div class="card-body" id="od-photos">
+              <p style="color:var(--text3);font-size:13px">載入中...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右欄：狀態與操作 -->
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-hd"><span class="card-title">狀態與操作</span></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+              <div id="od-actions"></div>
+              <div style="font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px" id="od-timestamps"></div>
+            </div>
+          </div>
+
+          <!-- 施工連結 -->
+          <div class="card">
+            <div class="card-hd"><span class="card-title">施工端連結</span></div>
+            <div class="card-body">
+              <div class="link-box">
+                <code id="od-installer-link" style="flex:1;font-family:var(--mono);font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></code>
+                <button class="btn btn-sm" onclick="copyOdLink()">複製</button>
+              </div>
+              <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="window.open(document.getElementById('od-installer-link').textContent)">開啟施工頁面 ↗</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="v-settings">
+      <div style="max-width:680px">
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="card-title">工單號碼設定</span></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:18px">
+
+            <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">工單號碼前置字元</div>
+                <div style="font-size:12px;color:var(--text3)">建立工單時號碼的開頭字元，例：B、W、A</div>
+              </div>
+              <input id="stg-order_prefix" maxlength="5"
+                     style="width:90px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);letter-spacing:.1em;padding:10px;border:2px solid var(--border2);border-radius:8px"
+                     oninput="refreshOrderIdPreview()">
+              <button class="btn btn-p" onclick="saveSetting('order_prefix')">儲存</button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">流水號位數</div>
+                <div style="font-size:12px;color:var(--text3)">年份後面的流水號長度，例：5 → 00001</div>
+              </div>
+              <input id="stg-order_seq_digits" type="number" min="3" max="8"
+                     style="width:90px;text-align:center;font-size:18px;font-weight:700;font-family:var(--mono);padding:10px;border:2px solid var(--border2);border-radius:8px"
+                     oninput="refreshOrderIdPreview()">
+              <button class="btn btn-p" onclick="saveSetting('order_seq_digits')">儲存</button>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><span class="card-title">工單號碼即時預覽</span></div>
+          <div class="card-body" style="display:flex;align-items:center;gap:24px">
+            <div>
+              <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:var(--blue);letter-spacing:.06em" id="order-id-preview">—</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:4px">前置字元 ＋ 西元年 ＋ 流水號</div>
+            </div>
+            <div style="font-size:13px;color:var(--text2);border-left:2px solid var(--border);padding-left:20px;line-height:2">
+              <div id="preview-breakdown"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCESSORIES -->
+    <div class="view" id="v-accessories">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">配件列表</span>
+          <button class="btn btn-sm btn-p" onclick="openAccModal()">+ 新增配件</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="tbl" id="acc-table">
+            <thead><tr>
+              <th>順序</th><th>配件名稱</th><th>完工拍照項目</th><th>操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCOUNTS -->
+    <div class="view" id="v-accounts">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">帳號列表</span>
+          <button class="btn btn-sm btn-p" onclick="openAccountModal()">+ 新增帳號</button>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl" id="accounts-table"><tbody></tbody></table></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Account Modal -->
+<div class="overlay" id="account-modal">
+  <div class="modal" style="width:440px">
+    <div class="modal-hd">
+      <span id="account-modal-title">新增帳號</span>
+      <button class="btn btn-sm" onclick="closeModal('account-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="acc-edit-acc-id">
+      <div class="form-grid" style="gap:12px">
+        <div class="fg"><label>帳號 *</label><input id="acc-username" placeholder="如：factory01" autocomplete="off"></div>
+        <div class="fg"><label id="acc-pw-label">密碼 *</label><input id="acc-password" type="password" placeholder="至少 4 碼" autocomplete="new-password"></div>
+        <div class="fg"><label>顯示名稱 *</label><input id="acc-display" placeholder="如：王大明"></div>
+        <div class="fg"><label>角色 *</label>
+          <select id="acc-role">
+            <option value="admin">管理員</option>
+            <option value="factory">廠務</option>
+            <option value="installer">技師</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('account-modal')">取消</button>
+      <button class="btn btn-p" onclick="saveAccount()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div class="overlay" id="login-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-hd"><span>登入配件安裝系統</span></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="fg">
+        <label>帳號</label>
+        <input id="login-user" placeholder="admin" autocomplete="username"
+               onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+      </div>
+      <div class="fg">
+        <label>密碼</label>
+        <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') doLogin()">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <input type="checkbox" id="login-show-pw" onchange="document.getElementById('login-pass').type=this.checked?'text':'password'">
+          <label for="login-show-pw" style="font-size:11px;color:var(--text3);font-weight:normal;cursor:pointer">顯示密碼</label>
+        </div>
+      </div>
+      <div id="login-error" style="display:none;color:var(--red);font-size:12px;padding:8px 12px;background:var(--red-bg);border-radius:6px"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-p" onclick="doLogin()" id="login-btn">登入</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="overlay" id="chpw-modal">
+  <div class="modal" style="width:380px">
+    <div class="modal-hd"><span>變更密碼</span><button class="btn btn-sm" onclick="closeModal('chpw-modal')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div class="fg"><label>舊密碼</label><input id="chpw-old" type="password"></div>
+      <div class="fg"><label>新密碼（至少 4 碼）</label><input id="chpw-new" type="password"></div>
+      <div class="fg"><label>確認新密碼</label><input id="chpw-confirm" type="password"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('chpw-modal')">取消</button>
+      <button class="btn btn-p" onclick="doChangePassword()">確認變更</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-hd"><span>指派技師</span><button class="btn btn-sm" onclick="closeModal('assign-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>技師姓名</label><select id="m-installer"></select></div>
+      <input type="hidden" id="m-order-id">
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('assign-modal')">取消</button>
+      <button class="btn btn-p" onclick="doAssign()">確認派工</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="overlay" id="reject-modal">
+  <div class="modal">
+    <div class="modal-hd"><span>退回工單</span><button class="btn btn-sm" onclick="closeModal('reject-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>退回原因</label><textarea id="m-reason" placeholder="說明退回原因..."></textarea></div>
+      <input type="hidden" id="m-reject-order-id">
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('reject-modal')">取消</button>
+      <button class="btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="doReject()">退回</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="overlay" id="user-modal">
+  <div class="modal">
+    <div class="modal-hd"><span>新增人員</span><button class="btn btn-sm" onclick="closeModal('user-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="gap:12px">
+        <div class="fg"><label>LINE ID</label><input id="u-lid" placeholder="U_xxxxxxxx"></div>
+        <div class="fg"><label>姓名</label><input id="u-name" placeholder="如：陳大明"></div>
+        <div class="fg"><label>角色</label><select id="u-role"><option value="installer">技師</option><option value="factory">廠務</option></select></div>
+        <div class="fg"><label>Email</label><input id="u-email" type="email" placeholder="xxx@example.com"></div>
+        <div class="fg full"><label>電話</label><input id="u-phone" placeholder="0912-345-678"></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('user-modal')">取消</button>
+      <button class="btn btn-p" onclick="doAddUser()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="overlay" id="edit-user-modal">
+  <div class="modal">
+    <div class="modal-hd"><span>編輯人員</span><button class="btn btn-sm" onclick="closeModal('edit-user-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="eu-lid">
+      <div class="form-grid" style="gap:12px">
+        <div class="fg full">
+          <label>LINE ID</label>
+          <input id="eu-line-id" placeholder="U_xxxxxxxx" style="font-family:var(--mono)">
+          <span style="font-size:11px;color:var(--text3)">用於 LINE Messaging API 推播通知（修改後相關工單會自動更新）</span>
+        </div>
+        <div class="fg"><label>姓名 *</label><input id="eu-name" placeholder="如：陳大明"></div>
+        <div class="fg"><label>角色 *</label>
+          <select id="eu-role">
+            <option value="installer">技師</option>
+            <option value="factory">廠務</option>
+          </select>
+        </div>
+        <div class="fg"><label>Email</label><input id="eu-email" type="email" placeholder="xxx@example.com"></div>
+        <div class="fg full"><label>電話</label><input id="eu-phone" placeholder="0912-345-678"></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('edit-user-modal')">取消</button>
+      <button class="btn btn-p" onclick="doEditUser()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accessory Modal -->
+<div class="overlay" id="acc-modal">
+  <div class="modal" style="width:520px">
+    <div class="modal-hd">
+      <span id="acc-modal-title">新增配件</span>
+      <button class="btn btn-sm" onclick="closeModal('acc-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="acc-edit-id">
+      <div class="fg">
+        <label>配件名稱 *</label>
+        <input id="acc-name" placeholder="如：行車紀錄器（單鏡）">
+      </div>
+      <div class="fg">
+        <label>完工拍照項目（每行一項）</label>
+        <textarea id="acc-photos" style="min-height:120px" placeholder="主機畫面&#10;GPS 位置&#10;後鏡頭安裝位置"></textarea>
+        <span style="font-size:11px;color:var(--text3)">每一行代表一個拍照要求，施工端會依此產生上傳按鈕</span>
+      </div>
+      <div class="fg">
+        <label>排列順序（數字越小越前面）</label>
+        <input id="acc-sort" type="number" value="0" style="width:120px">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('acc-modal')">取消</button>
+      <button class="btn btn-p" onclick="saveAccessory()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = window.location.origin;
+let AUTH_TOKEN = localStorage.getItem('auth_token') || '';
+let currentUser = null; // { id, username, display_name, role }
+
+// ── 登入系統 ────────────────────────────────────────────────
+function openLoginModal(msg) {
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  const err = document.getElementById('login-error');
+  if (msg) { err.textContent = msg; err.style.display = 'block'; }
+  else err.style.display = 'none';
+  document.getElementById('login-modal').classList.add('open');
+  setTimeout(() => document.getElementById('login-user').focus(), 100);
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  if (!username || !password) { document.getElementById('login-error').textContent='請輸入帳號和密碼'; document.getElementById('login-error').style.display='block'; return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = '登入中...';
+  try {
+    const res = await _origFetch(`${API}/api/auth/login`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      document.getElementById('login-error').textContent = d.error || '登入失敗';
+      document.getElementById('login-error').style.display = 'block';
+      return;
+    }
+    AUTH_TOKEN = d.token;
+    currentUser = d.user;
+    localStorage.setItem('auth_token', AUTH_TOKEN);
+    closeModal('login-modal');
+    onLoginSuccess();
+  } catch(e) {
+    document.getElementById('login-error').textContent = '網路錯誤：' + e.message;
+    document.getElementById('login-error').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '登入';
+  }
+}
+
+async function doLogout() {
+  try { await fetch(`${API}/api/auth/logout`, { method:'POST', headers:headers() }); } catch(e){}
+  AUTH_TOKEN = '';
+  currentUser = null;
+  localStorage.removeItem('auth_token');
+  openLoginModal();
+}
+
+function onLoginSuccess() {
+  updateSidebarUser();
+  loadDashboard();
+  loadUsers();
+  refreshAccGrid();
+}
+
+function updateSidebarUser() {
+  if (!currentUser) return;
+  document.getElementById('sidebar-user').textContent = currentUser.display_name || currentUser.username;
+  const roleEl = document.getElementById('sidebar-role');
+  const roleMap = { admin: ['管理員','b-rej'], factory: ['廠務','b-pend'], installer: ['技師','b-work'] };
+  const [label, cls] = roleMap[currentUser.role] || [currentUser.role, ''];
+  roleEl.textContent = label;
+  roleEl.className = 'badge ' + cls;
+  // 帳號管理只對 admin 顯示
+  const navAcc = document.getElementById('nav-accounts');
+  if (navAcc) navAcc.style.display = currentUser.role === 'admin' ? '' : 'none';
+}
+
+// 初始化：驗證既有 token
+async function initAuth() {
+  if (!AUTH_TOKEN) { openLoginModal(); return; }
+  try {
+    const res = await _origFetch(`${API}/api/auth/me`, { headers: {'X-Admin-Token': AUTH_TOKEN} });
+    if (!res.ok) { AUTH_TOKEN=''; localStorage.removeItem('auth_token'); openLoginModal(); return; }
+    currentUser = await res.json();
+    onLoginSuccess();
+  } catch(e) {
+    openLoginModal();
+  }
+}
+
+// 全域 fetch 攔截：401 → 導回登入
+const _origFetch = window.fetch;
+window.fetch = async function(...args) {
+  const res = await _origFetch(...args);
+  if (res.status === 401 && AUTH_TOKEN && !args[0]?.toString().includes('/api/auth/')) {
+    const clone = res.clone();
+    AUTH_TOKEN = ''; localStorage.removeItem('auth_token');
+    openLoginModal('登入已過期，請重新登入');
+    return clone;
+  }
+  return res;
+};
+
+// 改密碼
+function openChangePassword() {
+  ['chpw-old','chpw-new','chpw-confirm'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('chpw-modal').classList.add('open');
+}
+async function doChangePassword() {
+  const old_password = document.getElementById('chpw-old').value;
+  const new_password = document.getElementById('chpw-new').value;
+  const confirm_pw   = document.getElementById('chpw-confirm').value;
+  if (!old_password || !new_password) { toast('請填入所有欄位',false); return; }
+  if (new_password !== confirm_pw) { toast('兩次新密碼不一致',false); return; }
+  if (new_password.length < 4) { toast('新密碼至少 4 碼',false); return; }
+  const res = await fetch(`${API}/api/auth/change-password`, {
+    method:'POST', headers:headers(), body:JSON.stringify({old_password, new_password})
+  });
+  const d = await res.json();
+  if (res.ok) { toast('密碼已變更'); closeModal('chpw-modal'); }
+  else toast(d.error||'變更失敗',false);
+}
+
+const pageTitles = {dashboard:'總覽',create:'建立工單',orders:'工單列表','order-detail':'工單維護',gallery:'完工圖庫',notify:'通知紀錄',users:'人員管理',accessories:'配件管理',settings:'參數維護',accounts:'帳號管理'};
+const notifyLog = [];
+
+function nav(view, el){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('v-'+view).classList.add('active');
+  el.classList.add('active');
+  document.getElementById('page-title').textContent = pageTitles[view]||view;
+  if(view==='dashboard') loadDashboard();
+  if(view==='orders') loadOrders();
+  if(view==='users') loadUsers();
+  if(view==='accessories') loadAccessories();
+  if(view==='settings') loadSettings();
+  if(view==='accounts') loadAccounts();
+  if(view==='order-detail') { /* loaded by openOrderDetail */ }
+}
+
+function headers(){ return {'Content-Type':'application/json','X-Admin-Token':AUTH_TOKEN}; }
+
+function toast(msg, ok=true){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show';
+  setTimeout(()=>t.className='',2800);
+}
+
+function statusBadge(s){
+  const map={待派工:'b-wait',待確認:'b-pend',施工中:'b-work',待審核:'b-rev',已完成:'b-done',退回:'b-rej'};
+  return `<span class="badge ${map[s]||''}">${s}</span>`;
+}
+
+function rowActions(o){
+  let btns = '';
+  if(o.status==='待派工') btns+=`<button class="btn btn-sm" onclick="openAssign('${o.order_id}')">指派</button>`;
+  if(['待確認','施工中'].includes(o.status)) btns+=`<button class="btn btn-sm" onclick="doRecall('${o.order_id}')">收回</button>`;
+  if(o.status==='待審核'){
+    btns+=`<button class="btn btn-sm btn-p" onclick="doApprove('${o.order_id}')">通過</button>`;
+    btns+=`<button class="btn btn-sm" style="color:var(--red)" onclick="openReject('${o.order_id}')">退回</button>`;
+  }
+  btns+=`<button class="btn btn-sm" onclick="viewPhotos('${o.order_id}')">照片</button>`;
+  return `<div class="btn-row">${btns}</div>`;
+}
+
+async function loadDashboard(){
+  try{
+    const res = await fetch(`${API}/api/orders`,{headers:headers()});
+    const orders = await res.json();
+    document.getElementById('s-total').textContent = orders.length;
+    document.getElementById('s-wait').textContent = orders.filter(o=>o.status==='待派工').length;
+    document.getElementById('s-work').textContent = orders.filter(o=>o.status==='施工中').length;
+    document.getElementById('s-done').textContent = orders.filter(o=>o.status==='已完成').length;
+    const recent = orders.slice(0,8);
+    document.querySelector('#dash-table tbody').innerHTML = recent.map(o=>`
+      <tr>
+        <td><code style="font-family:var(--mono);font-size:12px">${o.order_id}</code></td>
+        <td><strong>${o.car_no}</strong></td>
+        <td>${o.car_type||'—'}</td>
+        <td>${o.installer_name||'<span style="color:var(--text3)">未指派</span>'}</td>
+        <td>${statusBadge(o.status)}</td>
+        <td>${o.created_at?.slice(0,10)||'—'}</td>
+        <td>${rowActions(o)}</td>
+      </tr>`).join('');
+  }catch(e){ toast('載入失敗: '+e.message, false); }
+}
+
+async function loadOrders(){
+  const p = new URLSearchParams();
+  const status   = document.getElementById('status-filter')?.value;
+  const orderId  = document.getElementById('f-order-id')?.value.trim();
+  const carNo    = document.getElementById('f-search-car')?.value.trim();
+  const dateFrom = document.getElementById('f-date-from')?.value;
+  const dateTo   = document.getElementById('f-date-to')?.value;
+  if(status)   p.set('status', status);
+  if(orderId)  p.set('order_id', orderId);
+  if(carNo)    p.set('car_no', carNo);
+  if(dateFrom) p.set('date_from', dateFrom);
+  if(dateTo)   p.set('date_to', dateTo);
+  try{
+    const res = await fetch(`${API}/api/orders?${p}`,{headers:headers()});
+    const orders = await res.json();
+    const countEl = document.getElementById('orders-count');
+    if(countEl) countEl.textContent = `共 ${orders.length} 筆`;
+    document.querySelector('#orders-table tbody').innerHTML = `
+      <tr><th>工單號</th><th>車牌</th><th>車型</th><th>配件</th><th>技師</th><th>狀態</th><th>到車日</th><th>交車日</th><th>建立日期</th><th>操作</th></tr>`+
+      orders.map(o=>`<tr>
+        <td><code style="font-family:var(--mono);font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline" onclick="openOrderDetail('${o.order_id}')">${o.order_id}</code></td>
+        <td><strong>${o.car_no}</strong></td>
+        <td>${o.car_type||'—'}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.items||'—'}</td>
+        <td>${o.installer_name||'<span style="color:var(--text3)">未指派</span>'}</td>
+        <td>${statusBadge(o.status)}</td>
+        <td style="white-space:nowrap">${o.arrival_date||'—'}</td>
+        <td style="white-space:nowrap">${o.delivery_date||'—'}</td>
+        <td style="white-space:nowrap">${o.created_at?.slice(0,10)||'—'}</td>
+        <td>${rowActions(o)}</td>
+      </tr>`).join('');
+  }catch(e){ toast('載入失敗',false); }
+}
+
+function clearOrderSearch(){
+  ['f-order-id','f-search-car','f-date-from','f-date-to'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('status-filter').value='';
+  loadOrders();
+}
+
+async function loadUsers(){
+  try{
+    const res = await fetch(`${API}/api/users`,{headers:headers()});
+    const users = await res.json();
+    const installers = users.filter(u=>u.role==='installer');
+    _installerCache = installers;
+    // populate selects
+    ['f-installer','m-installer'].forEach(id=>{
+      const s = document.getElementById(id);
+      if(!s) return;
+      const prev = s.value;
+      s.innerHTML = (id==='f-installer'?'<option value="">先建立工單，稍後指派</option>':'')+
+        installers.map(u=>`<option value="${u.name}">${u.name}</option>`).join('');
+      if(prev) s.value=prev;
+    });
+    document.querySelector('#users-table tbody').innerHTML =
+      `<tr><th>姓名</th><th>角色</th><th>Email</th><th>電話</th><th>LINE ID</th><th>操作</th></tr>`+
+      users.map(u=>`<tr>
+        <td><strong>${u.name}</strong></td>
+        <td>${u.role==='factory'?'廠務':'技師'}</td>
+        <td>${u.email||'—'}</td>
+        <td>${u.phone||'—'}</td>
+        <td><code style="font-family:var(--mono);font-size:11px">${u.line_id}</code></td>
+        <td>
+          <div class="btn-row">
+            <button class="btn btn-sm" onclick='openEditUserModal(${JSON.stringify(u)})'>修改</button>
+            <button class="btn btn-sm" style="color:var(--red)" onclick="doDeleteUser('${u.line_id}','${u.name}')">刪除</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }catch(e){}
+}
+
+async function submitOrder(){
+  const items = [...document.querySelectorAll('#acc-grid input:checked')].map(i=>i.value);
+  const body = {
+    source: document.getElementById('f-source').value.trim(),
+    car_no: document.getElementById('f-car-no').value.trim(),
+    engine_no: document.getElementById('f-engine-no').value.trim(),
+    car_type: document.getElementById('f-car-type').value.trim(),
+    location: document.getElementById('f-location').value.trim(),
+    install_date: document.getElementById('f-date').value,
+    arrival_date: document.getElementById('f-arrival-date').value,
+    delivery_date: document.getElementById('f-delivery-date').value,
+    items, note: document.getElementById('f-note').value.trim(),
+  };
+  if(!body.car_no){ toast('請填入車牌號碼',false); return; }
+  try{
+    const res = await fetch(`${API}/api/orders`,{method:'POST',headers:headers(),body:JSON.stringify(body)});
+    const d = await res.json();
+    if(!res.ok){ toast(d.error,false); return; }
+    addNotifyLog(`✅ 工單 ${d.order_id} 已建立`);
+    document.getElementById('create-result').style.display='block';
+    document.getElementById('cr-msg').textContent='工單建立成功！';
+    document.getElementById('cr-order-id').textContent=d.order_id;
+    // auto assign
+    const inst = document.getElementById('f-installer').value;
+    if(inst){
+      const ar = await fetch(`${API}/api/orders/${d.order_id}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
+      if(ar.ok){
+        document.getElementById('cr-link-box').style.display='flex';
+        document.getElementById('cr-link').textContent=`${API.replace('/api','')}/installer/${d.order_id}`;
+        addNotifyLog(`📤 LINE/Email 通知已發送給 ${inst}`);
+      }
+    }
+    toast('工單建立成功！');
+  }catch(e){ toast('建立失敗: '+e.message,false); }
+}
+
+function clearForm(){
+  ['f-source','f-car-no','f-engine-no','f-car-type','f-location','f-note'].forEach(id=>document.getElementById(id).value='');
+  ['f-date','f-arrival-date','f-delivery-date'].forEach(id=>document.getElementById(id).value='');
+  document.querySelectorAll('#acc-grid input').forEach(i=>i.checked=false);
+  document.querySelectorAll('#acc-grid label').forEach(l=>l.classList.remove('on'));
+  document.getElementById('create-result').style.display='none';
+}
+
+function copyLink(){ navigator.clipboard?.writeText(document.getElementById('cr-link').textContent); toast('連結已複製'); }
+
+function openAssign(oid){
+  document.getElementById('m-order-id').value=oid;
+  loadUsers();
+  document.getElementById('assign-modal').classList.add('open');
+}
+async function doAssign(){
+  const oid=document.getElementById('m-order-id').value;
+  const inst=document.getElementById('m-installer').value;
+  const res=await fetch(`${API}/api/orders/${oid}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
+  const d=await res.json();
+  if(res.ok){ toast('派工成功，已發送通知'); addNotifyLog(`📤 ${oid} 已指派給 ${inst}`); loadOrders(); }
+  else toast(d.error,false);
+  closeModal('assign-modal');
+}
+
+function openReject(oid){
+  document.getElementById('m-reject-order-id').value=oid;
+  document.getElementById('reject-modal').classList.add('open');
+}
+async function doReject(){
+  const oid=document.getElementById('m-reject-order-id').value;
+  const reason=document.getElementById('m-reason').value.trim()||'未說明';
+  const res=await fetch(`${API}/api/orders/${oid}/reject`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
+  if(res.ok){ toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`); loadOrders(); }
+  closeModal('reject-modal');
+}
+
+async function doApprove(oid){
+  if(!confirm(`確定通過工單 ${oid}？`)) return;
+  const res=await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
+  if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); loadOrders(); }
+}
+
+async function doRecall(oid){
+  if(!confirm(`確定收回工單 ${oid}？`)) return;
+  const res=await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
+  if(res.ok){ toast('已收回'); loadOrders(); }
+}
+
+async function loadPhotos(){
+  const oid=document.getElementById('g-order-id').value.trim();
+  if(!oid) return;
+  const res=await fetch(`${API}/api/orders/${oid}/photos`);
+  const photos=await res.json();
+  const area=document.getElementById('gallery-area');
+  if(!photos.length){ area.innerHTML='<p style="color:var(--text3);font-size:13px;padding:12px 0">此工單尚無照片</p>'; return; }
+  // group by type
+  const byType={};
+  photos.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
+  area.innerHTML = Object.entries(byType).map(([type,ps])=>`
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
+      <div class="photo-grid">
+        ${ps.map(p=>`<div><img class="photo-thumb" src="${p.url}" alt="${p.photo_type}" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\'/>'" onclick="window.open('${p.url}')"><div class="photo-label">${p.uploaded_at?.slice(11,16)||''}</div></div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function viewPhotos(oid){
+  nav('gallery', document.querySelectorAll('.nav-item')[3]);
+  document.getElementById('g-order-id').value=oid;
+  loadPhotos();
+}
+
+function openUserModal(){ document.getElementById('user-modal').classList.add('open'); }
+async function doAddUser(){
+  const body={line_id:document.getElementById('u-lid').value.trim(),name:document.getElementById('u-name').value.trim(),role:document.getElementById('u-role').value,email:document.getElementById('u-email').value.trim(),phone:document.getElementById('u-phone').value.trim()};
+  const res=await fetch(`${API}/api/users`,{method:'POST',headers:headers(),body:JSON.stringify(body)});
+  const d=await res.json();
+  if(res.ok){ toast('人員已新增'); loadUsers(); closeModal('user-modal'); }
+  else toast(d.error,false);
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function addNotifyLog(msg){
+  notifyLog.unshift({msg,time:new Date().toLocaleTimeString('zh-TW')});
+  const log=document.getElementById('notify-log');
+  log.innerHTML=notifyLog.map(n=>`<div class="nl-item"><span style="color:var(--text3);margin-right:8px">${n.time}</span><span class="${n.msg.includes('✅')||n.msg.includes('📤')?'nl-ok':n.msg.includes('❌')?'nl-fail':''}">${n.msg}</span></div>`).join('');
+}
+
+async function exportExcel(){
+  window.open(`${API}/api/export/excel?token=${AUTH_TOKEN}`);
+}
+
+// ── 工單維護 ────────────────────────────────────────────────
+let _currentOrder = null;
+
+async function openOrderDetail(orderId){
+  // 切換到 order-detail view（不透過 nav，避免 nav-item active 錯位）
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('v-order-detail').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[2].classList.add('active'); // 工單列表仍亮著
+  document.getElementById('page-title').textContent = '工單維護';
+
+  // 載入配件清單（若尚未載入）
+  if(!_accList.length) await fetchAccessories();
+
+  // 載入工單
+  const res = await fetch(`${API}/api/orders/${orderId}`, {headers:headers()});
+  if(!res.ok){ toast('載入失敗',false); return; }
+  _currentOrder = await res.json();
+  renderOrderDetail();
+
+  // 載入照片
+  loadOrderDetailPhotos(orderId);
+}
+
+function renderOrderDetail(){
+  const o = _currentOrder;
+  document.getElementById('od-order-id').textContent      = o.order_id;
+  document.getElementById('od-order-id-field').textContent = o.order_id;
+  document.getElementById('od-status-badge').innerHTML = statusBadge(o.status);
+
+  // 填入可編輯欄位
+  document.getElementById('od-source').value       = o.source||'';
+  document.getElementById('od-car-no').value        = o.car_no||'';
+  document.getElementById('od-engine-no').value     = o.engine_no||'';
+  document.getElementById('od-car-type').value      = o.car_type||'';
+  document.getElementById('od-location').value      = o.location||'';
+  document.getElementById('od-install-date').value  = o.install_date||'';
+  document.getElementById('od-arrival-date').value  = o.arrival_date||'';
+  document.getElementById('od-delivery-date').value = o.delivery_date||'';
+  document.getElementById('od-note').value          = o.note||'';
+
+  // 配件多選格（從快取載入）
+  const checked = (o.items||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const grid = document.getElementById('od-acc-grid');
+  grid.innerHTML = _accList.map(a=>{
+    const on = checked.includes(a.name);
+    return `<label class="acc-item ${on?'on':''}">
+      <input type="checkbox" value="${a.name}" ${on?'checked':''}> ${a.name}
+    </label>`;
+  }).join('');
+  grid.querySelectorAll('.acc-item').forEach(item=>{
+    item.addEventListener('change',()=>item.classList.toggle('on',item.querySelector('input').checked));
+  });
+
+  // 施工連結
+  const link = `${API}/installer/${o.order_id}`;
+  document.getElementById('od-installer-link').textContent = link;
+
+  // 時間戳記
+  document.getElementById('od-timestamps').innerHTML = [
+    ['建立時間', o.created_at],
+    ['到場時間', o.arrived_at],
+    ['完工時間', o.completed_at],
+  ].filter(([,v])=>v).map(([k,v])=>`<div><span style="color:var(--text3)">${k}：</span>${v}</div>`).join('');
+
+  // 操作按鈕（依狀態）
+  let btns = '';
+  if(o.status==='待派工')
+    btns += `<div class="fg" style="margin-bottom:8px"><label>指派技師</label><select id="od-installer-sel">${
+      (_installerCache||[]).map(u=>`<option value="${u.name}">${u.name}</option>`).join('')
+    }</select></div>
+    <button class="btn btn-p" style="width:100%" onclick="odAssign()">指派並發送通知</button>`;
+  if(['待確認','施工中'].includes(o.status))
+    btns += `<button class="btn" style="width:100%;color:var(--amber)" onclick="odRecall()">收回工單</button>`;
+  if(o.status==='待審核'){
+    btns += `<button class="btn btn-p" style="width:100%;margin-bottom:8px" onclick="odApprove()">審核通過</button>`;
+    btns += `<button class="btn" style="width:100%;color:var(--red)" onclick="openReject(null, true)">退回工單</button>`;
+  }
+  if(o.status==='退回' && o.reject_reason)
+    btns += `<div style="background:var(--red-bg);border:1px solid #f5c0c0;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red)"><strong>退回原因：</strong>${o.reject_reason}</div>`;
+  document.getElementById('od-actions').innerHTML = btns || `<div style="color:var(--text3);font-size:13px;text-align:center;padding:8px">此狀態無可用操作</div>`;
+}
+
+async function saveOrderDetail(){
+  const o = _currentOrder;
+  const items = [...document.querySelectorAll('#od-acc-grid input:checked')].map(i=>i.value);
+  const body = {
+    source:        document.getElementById('od-source').value.trim(),
+    car_no:        document.getElementById('od-car-no').value.trim(),
+    engine_no:     document.getElementById('od-engine-no').value.trim(),
+    car_type:      document.getElementById('od-car-type').value.trim(),
+    location:      document.getElementById('od-location').value.trim(),
+    install_date:  document.getElementById('od-install-date').value,
+    arrival_date:  document.getElementById('od-arrival-date').value,
+    delivery_date: document.getElementById('od-delivery-date').value,
+    note:          document.getElementById('od-note').value.trim(),
+    items,
+  };
+  if(!body.car_no){ toast('車牌號碼不可空白',false); return; }
+  const btn = document.getElementById('od-save-btn');
+  btn.textContent='儲存中...'; btn.disabled=true;
+  const res = await fetch(`${API}/api/orders/${o.order_id}`,{method:'PUT',headers:headers(),body:JSON.stringify(body)});
+  btn.textContent='儲存變更'; btn.disabled=false;
+  if(res.ok){ toast('工單已更新'); Object.assign(_currentOrder, body); }
+  else{ const d=await res.json(); toast(d.error||'儲存失敗',false); }
+}
+
+async function loadOrderDetailPhotos(orderId){
+  const area = document.getElementById('od-photos');
+  try{
+    const res = await fetch(`${API}/api/orders/${orderId}/photos`);
+    const photos = await res.json();
+    if(!photos.length){ area.innerHTML='<p style="color:var(--text3);font-size:13px">尚無照片</p>'; return; }
+    const byType={};
+    photos.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
+    area.innerHTML = Object.entries(byType).map(([type,ps])=>`
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
+        <div class="photo-grid">
+          ${ps.map(p=>`<div>
+            <img class="photo-thumb" src="${p.url}" onclick="window.open('${p.url}')" onerror="this.style.display='none'">
+            <div class="photo-label">${p.uploaded_at?.slice(11,16)||''}</div>
+          </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }catch(e){ area.innerHTML='<p style="color:var(--red);font-size:13px">照片載入失敗</p>'; }
+}
+
+// 工單維護頁的操作（呼叫後重新整理當前工單）
+async function odAssign(){
+  const inst = document.getElementById('od-installer-sel')?.value;
+  if(!inst){ toast('請選擇技師',false); return; }
+  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
+  const d = await res.json();
+  if(res.ok){ toast('派工成功，已發送通知'); addNotifyLog(`📤 ${_currentOrder.order_id} 已指派給 ${inst}`); await openOrderDetail(_currentOrder.order_id); }
+  else toast(d.error,false);
+}
+async function odRecall(){
+  if(!confirm(`確定收回工單 ${_currentOrder.order_id}？`)) return;
+  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/recall`,{method:'POST',headers:headers()});
+  if(res.ok){ toast('已收回'); await openOrderDetail(_currentOrder.order_id); }
+}
+async function odApprove(){
+  if(!confirm(`確定通過工單 ${_currentOrder.order_id}？`)) return;
+  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/approve`,{method:'POST',headers:headers()});
+  if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${_currentOrder.order_id} 通過`); await openOrderDetail(_currentOrder.order_id); }
+}
+
+// 退回 modal 支援從維護頁呼叫
+let _rejectFromDetail = false;
+function openReject(oid, fromDetail=false){
+  _rejectFromDetail = fromDetail;
+  document.getElementById('m-reject-order-id').value = oid || _currentOrder?.order_id || '';
+  document.getElementById('m-reason').value='';
+  document.getElementById('reject-modal').classList.add('open');
+}
+async function doReject(){
+  const oid=document.getElementById('m-reject-order-id').value;
+  const reason=document.getElementById('m-reason').value.trim()||'未說明';
+  const res=await fetch(`${API}/api/orders/${oid}/reject`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
+  if(res.ok){
+    toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`);
+    if(_rejectFromDetail) await openOrderDetail(oid);
+    else loadOrders();
+  }
+  closeModal('reject-modal');
+}
+
+function copyOdLink(){ navigator.clipboard?.writeText(document.getElementById('od-installer-link').textContent); toast('連結已複製'); }
+
+// 快取技師清單供維護頁使用
+let _installerCache = [];
+const _origLoadUsers = loadUsers;
+
+// ── 配件管理 ────────────────────────────────────────────────
+let _accList = []; // 快取配件列表
+
+async function fetchAccessories(){
+  try{
+    const res = await fetch(`${API}/api/accessories`);
+    _accList = await res.json();
+  }catch(e){ _accList=[]; }
+  return _accList;
+}
+
+async function loadAccessories(){
+  await fetchAccessories();
+  const tbody = document.querySelector('#acc-table tbody');
+  if(!_accList.length){
+    tbody.innerHTML='<tr><td colspan="4" style="color:var(--text3);text-align:center;padding:24px">尚無配件，請點右上角新增</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _accList.map(a=>`
+    <tr>
+      <td style="color:var(--text3);width:60px">${a.sort_order}</td>
+      <td><strong>${a.name}</strong></td>
+      <td style="max-width:320px">
+        ${a.photos.map(p=>`<span style="display:inline-flex;background:var(--blue-bg);color:var(--blue);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:500;margin:2px">${p}</span>`).join('')}
+        ${!a.photos.length?'<span style="color:var(--text3);font-size:12px">（不需拍照）</span>':''}
+      </td>
+      <td>
+        <div class="btn-row">
+          <button class="btn btn-sm" onclick="openAccModal(${a.id})">編輯</button>
+          <button class="btn btn-sm" style="color:var(--red)" onclick="deleteAccessory(${a.id},'${a.name.replace(/'/g,"\\'")}')">刪除</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function refreshAccGrid(){
+  await fetchAccessories();
+  const grid = document.getElementById('acc-grid');
+  if(!_accList.length){ grid.innerHTML='<span style="color:var(--text3);font-size:12px">尚無配件，請先在「配件管理」新增</span>'; return; }
+  grid.innerHTML = _accList.map(a=>`
+    <label class="acc-item">
+      <input type="checkbox" value="${a.name}"> ${a.name}
+    </label>`).join('');
+  grid.querySelectorAll('.acc-item').forEach(item=>{
+    item.addEventListener('change',()=>item.classList.toggle('on',item.querySelector('input').checked));
+  });
+}
+
+function openAccModal(id){
+  document.getElementById('acc-modal-title').textContent = id ? '編輯配件' : '新增配件';
+  document.getElementById('acc-edit-id').value = id||'';
+  if(id){
+    const acc = _accList.find(a=>a.id===id);
+    if(!acc) return;
+    document.getElementById('acc-name').value = acc.name;
+    document.getElementById('acc-photos').value = acc.photos.join('\n');
+    document.getElementById('acc-sort').value = acc.sort_order;
+  }else{
+    document.getElementById('acc-name').value='';
+    document.getElementById('acc-photos').value='';
+    document.getElementById('acc-sort').value='0';
+  }
+  document.getElementById('acc-modal').classList.add('open');
+}
+
+async function saveAccessory(){
+  const id = document.getElementById('acc-edit-id').value;
+  const name = document.getElementById('acc-name').value.trim();
+  const photos = document.getElementById('acc-photos').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const sort_order = parseInt(document.getElementById('acc-sort').value)||0;
+  if(!name){ toast('請填入配件名稱',false); return; }
+  const body = {name, photos, sort_order};
+  const url  = id ? `${API}/api/accessories/${id}` : `${API}/api/accessories`;
+  const method = id ? 'PUT' : 'POST';
+  const res  = await fetch(url,{method,headers:headers(),body:JSON.stringify(body)});
+  const d    = await res.json();
+  if(!res.ok){ toast(d.error,false); return; }
+  toast(id ? '配件已更新' : '配件已新增');
+  closeModal('acc-modal');
+  loadAccessories();
+  refreshAccGrid();
+}
+
+async function deleteAccessory(id, name){
+  if(!confirm(`確定刪除「${name}」？`)) return;
+  const res = await fetch(`${API}/api/accessories/${id}`,{method:'DELETE',headers:headers()});
+  if(res.ok){ toast('已刪除'); loadAccessories(); refreshAccGrid(); }
+  else toast('刪除失敗',false);
+}
+
+// ── 參數維護 ────────────────────────────────────────────────
+async function loadSettings(){
+  try{
+    const res = await fetch(`${API}/api/settings`, {headers:headers()});
+    if(!res.ok){ toast('參數載入失敗',false); return; }
+    const list = await res.json();
+    list.forEach(s=>{
+      const el = document.getElementById(`stg-${s.key}`);
+      if(el) el.value = s.value;
+    });
+    refreshOrderIdPreview();
+  }catch(e){ toast('參數載入失敗',false); }
+}
+
+async function saveSetting(key){
+  const el = document.getElementById(`stg-${key}`);
+  if(!el){ toast('找不到輸入欄位',false); return; }
+  const value = el.value.trim();
+  if(!value){ toast('值不可空白',false); return; }
+  const btn = el.nextElementSibling;
+  if(btn){ btn.textContent='儲存中...'; btn.disabled=true; }
+  try{
+    const res = await fetch(`${API}/api/settings/${key}`,{
+      method:'PUT', headers:headers(), body:JSON.stringify({value})
+    });
+    const d = await res.json();
+    if(res.ok){
+      toast('✓ 儲存成功');
+      refreshOrderIdPreview();
+    } else {
+      toast(d.error||'儲存失敗', false);
+    }
+  }catch(e){
+    toast('網路錯誤：'+e.message, false);
+  } finally {
+    if(btn){ btn.textContent='儲存'; btn.disabled=false; }
+  }
+}
+
+function refreshOrderIdPreview(){
+  const prefix = (document.getElementById('stg-order_prefix')?.value||'B').trim()||'B';
+  const digits = Math.max(1, parseInt(document.getElementById('stg-order_seq_digits')?.value||'5')||5);
+  const year   = new Date().getFullYear();
+  const seq    = '1'.padStart(digits, '0');
+  const preview = `${prefix}${year}${seq}`;
+  const el = document.getElementById('order-id-preview');
+  const bd = document.getElementById('preview-breakdown');
+  if(el) el.textContent = preview;
+  if(bd) bd.innerHTML =
+    `<div><span style="color:var(--blue);font-weight:600">${prefix}</span> ← 前置字元（${prefix.length} 碼）</div>`+
+    `<div><span style="color:var(--green);font-weight:600">${year}</span> ← 西元年（4 碼）</div>`+
+    `<div><span style="color:var(--amber);font-weight:600">${seq}</span> ← 流水號（${digits} 碼）</div>`+
+    `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">總長度：${preview.length} 碼</div>`;
+}
+
+// ── User Edit / Delete ──────────────────────────────────────────────────────
+function openEditUserModal(u) {
+  document.getElementById('eu-lid').value      = u.line_id;  // 原始 line_id（URL 用）
+  document.getElementById('eu-line-id').value  = u.line_id;  // 可編輯的 LINE ID
+  document.getElementById('eu-name').value     = u.name;
+  document.getElementById('eu-role').value     = u.role;
+  document.getElementById('eu-email').value    = u.email  || '';
+  document.getElementById('eu-phone').value    = u.phone  || '';
+  document.getElementById('edit-user-modal').classList.add('open');
+}
+
+async function doEditUser() {
+  const oldLid = document.getElementById('eu-lid').value;      // URL path 用原始值
+  const body = {
+    line_id : document.getElementById('eu-line-id').value.trim(),
+    name    : document.getElementById('eu-name').value.trim(),
+    role    : document.getElementById('eu-role').value,
+    email   : document.getElementById('eu-email').value.trim(),
+    phone   : document.getElementById('eu-phone').value.trim(),
+  };
+  if (!body.name) { toast('姓名不可空白', false); return; }
+  if (!body.line_id) { toast('LINE ID 不可空白', false); return; }
+  const res = await fetch(`${API}/api/users/${oldLid}`, {
+    method: 'PUT', headers: headers(), body: JSON.stringify(body)
+  });
+  const d = await res.json();
+  if (res.ok) {
+    toast('人員資料已更新');
+    loadUsers();
+    closeModal('edit-user-modal');
+  } else {
+    toast(d.error || '更新失敗', false);
+  }
+}
+
+async function doDeleteUser(lid, name) {
+  if (!confirm(`確定刪除「${name}」？此操作無法復原。`)) return;
+  const res = await fetch(`${API}/api/users/${lid}`, {
+    method: 'DELETE', headers: headers()
+  });
+  const d = await res.json();
+  if (res.ok) { toast('已刪除'); loadUsers(); }
+  else toast(d.error || '刪除失敗', false);
+}
+
+// ── 帳號管理 ────────────────────────────────────────────────
+async function loadAccounts() {
+  try {
+    const res = await fetch(`${API}/api/accounts`, {headers:headers()});
+    if (res.status === 403) { toast('僅管理員可操作',false); return; }
+    const list = await res.json();
+    const roleLabel = {admin:'管理員', factory:'廠務', installer:'技師'};
+    document.querySelector('#accounts-table tbody').innerHTML =
+      `<tr><th>帳號</th><th>顯示名稱</th><th>角色</th><th>狀態</th><th>建立時間</th><th>操作</th></tr>` +
+      list.map(a => `<tr>
+        <td><code style="font-family:var(--mono);font-size:12px">${a.username}</code></td>
+        <td><strong>${a.display_name||'—'}</strong></td>
+        <td>${roleLabel[a.role]||a.role}</td>
+        <td>${a.is_active ? '<span class="badge b-done">啟用</span>' : '<span class="badge b-rej">停用</span>'}</td>
+        <td style="white-space:nowrap">${a.created_at?.slice(0,10)||'—'}</td>
+        <td>
+          <div class="btn-row">
+            <button class="btn btn-sm" onclick='openAccountModal(${JSON.stringify(a)})'>修改</button>
+            <button class="btn btn-sm" style="color:var(--red)" onclick="deleteAccount(${a.id},'${a.username}')">刪除</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  } catch(e){ toast('載入失敗',false); }
+}
+
+function openAccountModal(acc) {
+  const isEdit = !!acc;
+  document.getElementById('account-modal-title').textContent = isEdit ? '修改帳號' : '新增帳號';
+  document.getElementById('acc-edit-acc-id').value = isEdit ? acc.id : '';
+  document.getElementById('acc-username').value    = isEdit ? acc.username : '';
+  document.getElementById('acc-username').readOnly = isEdit;
+  document.getElementById('acc-username').style.opacity = isEdit ? '.6' : '1';
+  document.getElementById('acc-display').value     = isEdit ? acc.display_name : '';
+  document.getElementById('acc-role').value         = isEdit ? acc.role : 'factory';
+  document.getElementById('acc-password').value     = '';
+  document.getElementById('acc-pw-label').textContent = isEdit ? '新密碼（留空不修改）' : '密碼 *';
+  document.getElementById('account-modal').classList.add('open');
+}
+
+async function saveAccount() {
+  const id   = document.getElementById('acc-edit-acc-id').value;
+  const body = {
+    username:     document.getElementById('acc-username').value.trim(),
+    password:     document.getElementById('acc-password').value,
+    display_name: document.getElementById('acc-display').value.trim(),
+    role:         document.getElementById('acc-role').value,
+  };
+  if (!body.username || !body.display_name) { toast('請填入帳號和顯示名稱',false); return; }
+  if (!id && !body.password) { toast('新建帳號需要密碼',false); return; }
+  if (!id && body.password.length < 4) { toast('密碼至少 4 碼',false); return; }
+  // 編輯時若密碼留空則不送
+  if (id && !body.password) delete body.password;
+  const url    = id ? `${API}/api/accounts/${id}` : `${API}/api/accounts`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:headers(), body:JSON.stringify(body)});
+  const d = await res.json();
+  if (res.ok) { toast(id ? '帳號已更新' : '帳號已建立'); closeModal('account-modal'); loadAccounts(); }
+  else toast(d.error||'操作失敗',false);
+}
+
+async function deleteAccount(id, username) {
+  if (!confirm(`確定刪除帳號「${username}」？此操作無法復原。`)) return;
+  const res = await fetch(`${API}/api/accounts/${id}`, {method:'DELETE', headers:headers()});
+  const d = await res.json();
+  if (res.ok) { toast('帳號已刪除'); loadAccounts(); }
+  else toast(d.error||'刪除失敗',false);
+}
+
+// ── Init ────────────────────────────────────────────────────
+document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+initAuth();
+</script>
+</body>
+</html>

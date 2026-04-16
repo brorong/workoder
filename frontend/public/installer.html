@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>施工確認</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+:root {
+  --bg:#f2f4f8; --surface:#fff; --border:#e0e4ec; --border2:#c8cdd9;
+  --text:#1a1d23; --text2:#5a6175; --text3:#9aa0b2;
+  --blue:#185FA5; --blue-bg:#e8f1fb; --blue-light:#378ADD;
+  --green:#2d7a4f; --green-bg:#e6f4ed; --green-dark:#1e5535;
+  --amber:#8a5a00; --amber-bg:#fef3d8;
+  --red:#a02020; --red-bg:#fdeaea; --red-border:#f5c0c0;
+  --sans:'Noto Sans TC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:15px;min-height:100vh;padding-bottom:80px}
+/* Header */
+.hdr{background:var(--blue);color:#fff;padding:16px 18px 14px;position:sticky;top:0;z-index:50}
+.hdr-title{font-size:17px;font-weight:700}
+.hdr-sub{font-size:12px;opacity:.75;margin-top:2px}
+/* Steps */
+.step-nav{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.step-nav::-webkit-scrollbar{display:none}
+.step-pill{padding:6px 14px;border-radius:99px;font-size:12px;font-weight:500;white-space:nowrap;border:1px solid var(--border);color:var(--text3);background:var(--bg);cursor:pointer;flex-shrink:0}
+.step-pill.done{background:var(--green-bg);color:var(--green);border-color:#b2d9c1}
+.step-pill.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* Content */
+.page{padding:16px;display:none}
+.page.active{display:block}
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden}
+.card-hd{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:500;font-size:15px;display:flex;align-items:center;gap:8px}
+.card-body{padding:16px}
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--text2)}
+.info-val{font-weight:500;text-align:right;max-width:60%}
+/* Alert */
+.alert{padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:14px;font-weight:500;line-height:1.5}
+.alert-red{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)}
+.alert-amber{background:var(--amber-bg);border:1px solid #f0d690;color:var(--amber)}
+.alert-green{background:var(--green-bg);border:1px solid #b2d9c1;color:var(--green)}
+/* Big button */
+.btn-big{width:100%;padding:18px;font-size:16px;font-weight:700;font-family:var(--sans);border-radius:14px;border:none;cursor:pointer;margin-bottom:12px;letter-spacing:.02em}
+.btn-arrive{background:var(--blue);color:#fff}
+.btn-arrive:disabled{background:#b0c4de;cursor:not-allowed}
+.btn-green{background:var(--green-dark);color:#fff}
+.btn-outline{background:var(--surface);color:var(--text);border:1px solid var(--border2);padding:14px;font-size:15px;font-weight:500;width:100%;border-radius:12px;font-family:var(--sans);cursor:pointer;margin-bottom:10px}
+/* Photo upload */
+.photo-section{margin-bottom:14px}
+.photo-sec-title{font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;padding:0 2px}
+.photo-upload-btn{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px dashed var(--border2);border-radius:12px;cursor:pointer;margin-bottom:8px;background:var(--bg);font-size:14px;color:var(--text2);width:100%;font-family:var(--sans)}
+.photo-upload-btn:active{background:var(--blue-bg)}
+.photo-upload-btn.done{border-style:solid;border-color:#b2d9c1;background:var(--green-bg);color:var(--green)}
+.photo-upload-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+.upload-label{display:flex;flex-direction:column;gap:2px}
+.upload-label small{font-size:11px;opacity:.7}
+.preview-thumb{width:56px;height:42px;object-fit:cover;border-radius:6px;margin-left:auto;border:1px solid var(--border)}
+input[type=file]{display:none}
+/* Signature */
+#sig-canvas{width:100%;height:160px;border:1.5px solid var(--border2);border-radius:12px;background:#fafafa;touch-action:none;cursor:crosshair}
+.sig-hint{font-size:12px;color:var(--text3);text-align:center;margin-top:6px}
+/* Loading */
+.loading{text-align:center;padding:40px;color:var(--text3);font-size:14px}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Fixed bottom bar */
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 16px;z-index:60}
+/* Badge */
+.badge{display:inline-flex;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500}
+.b-work{background:var(--blue-bg);color:var(--blue)}
+.b-done{background:var(--green-bg);color:var(--green)}
+.b-rej{background:var(--red-bg);color:var(--red)}
+/* Extra photo grid */
+.extra-section-hd{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);margin-bottom:10px}
+.extra-section-hd span{font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.07em;text-transform:uppercase}
+.extra-section-hd small{font-size:11px;color:var(--text3)}
+.extra-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+.extra-thumb-wrap{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg)}
+.extra-thumb-wrap img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.extra-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:2;padding:0}
+.extra-retake-btn{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:11px;text-align:center;padding:5px 0;cursor:pointer;border:none;width:100%;font-family:var(--sans)}
+.extra-add-card{border:1.5px dashed var(--border2);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;padding:14px 8px;text-align:center;font-family:var(--sans);aspect-ratio:4/3}
+.extra-add-card:active{background:var(--blue-bg);border-color:var(--blue)}
+.extra-add-card svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title" id="hdr-order-id">載入中...</div>
+  <div class="hdr-sub" id="hdr-plate"></div>
+</div>
+
+<div class="step-nav" id="step-nav">
+  <div class="step-pill active" data-step="0" onclick="gotoStep(0)">1 到場核對</div>
+  <div class="step-pill" data-step="1" onclick="gotoStep(1)">2 施工前拍照</div>
+  <div class="step-pill" data-step="2" onclick="gotoStep(2)">3 完工拍照</div>
+  <div class="step-pill" data-step="3" onclick="gotoStep(3)">4 完工確認</div>
+</div>
+
+<!-- STEP 0: 到場核對 -->
+<div class="page active" id="step-0">
+  <div id="loading-0" class="loading"><div class="spinner"></div>載入工單中...</div>
+  <div id="order-info" style="display:none">
+    <div id="reject-alert" style="display:none" class="alert alert-red"></div>
+    <div class="card">
+      <div class="card-hd">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 8h-8"/><path d="M16 12h-8"/><path d="M10 16h-2"/></svg>
+        工單詳情
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">工單號</span><span class="info-val" style="font-size:13px;font-family:monospace" id="d-oid"></span></div>
+        <div class="info-row"><span class="info-key">車牌</span><span class="info-val" id="d-car-no"></span></div>
+        <div class="info-row"><span class="info-key">引擎號</span><span class="info-val" id="d-engine"></span></div>
+        <div class="info-row"><span class="info-key">車型</span><span class="info-val" id="d-car-type"></span></div>
+        <div class="info-row"><span class="info-key">地點</span><span class="info-val" id="d-location"></span></div>
+        <div class="info-row"><span class="info-key">安裝配件</span><span class="info-val" id="d-items"></span></div>
+      </div>
+    </div>
+    <div id="note-box" style="display:none" class="alert alert-amber">
+      <strong>特別要求：</strong><br><span id="d-note"></span>
+    </div>
+    <div id="arrived-box" class="alert alert-green" style="display:none">已到達現場 — <span id="d-arrived"></span></div>
+    <button class="btn-big btn-arrive" id="arrive-btn" onclick="doArrive()">我已到達現場</button>
+  </div>
+</div>
+
+<!-- STEP 1: 施工前拍照 -->
+<div class="page" id="step-1">
+  <div class="card">
+    <div class="card-hd">施工前免責記錄</div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">拍攝以下照片，作為車輛原況記錄，保障雙方權益</p>
+      <div id="before-photos"></div>
+      <div id="extra-before"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: 完工拍照 -->
+<div class="page" id="step-2">
+  <div class="card">
+    <div class="card-hd">完工拍照（依配件動態展開）</div>
+    <div class="card-body">
+      <div id="after-photos"></div>
+      <div id="extra-after"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3: 完工確認 -->
+<div class="page" id="step-3">
+  <div class="card">
+    <div class="card-hd">完工確認</div>
+    <div class="card-body">
+      <div class="info-row"><span class="info-key">已上傳照片</span><span class="info-val" id="photo-count" style="color:var(--green);font-size:16px;font-weight:700">0 張</span></div>
+      <div class="info-row"><span class="info-key">車牌</span><span class="info-val" id="confirm-plate"></span></div>
+      <div class="info-row"><span class="info-key">工單</span><span class="info-val" id="confirm-oid"></span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd">數位簽名</div>
+    <div class="card-body">
+      <canvas id="sig-canvas"></canvas>
+      <div class="sig-hint">請在上方簽名</div>
+      <button class="btn-outline" style="margin-top:10px" onclick="clearSig()">清除重簽</button>
+    </div>
+  </div>
+  <button class="btn-big btn-green" id="submit-btn" onclick="doSubmit()">送出完工確認</button>
+  <div id="submit-done" style="display:none">
+    <div class="alert alert-green" style="text-align:center;padding:24px">
+      <div style="font-size:20px;font-weight:700;margin-bottom:4px">完工資料已送出</div>
+      <div style="font-size:13px;opacity:.8">後台已收到通知，等待審核</div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden inputs for extra photos -->
+<input type="file" id="extra-input-before" accept="image/*" capture="environment" multiple style="display:none" onchange="handleExtraAdd('before',this)">
+<input type="file" id="extra-input-after"  accept="image/*" capture="environment" multiple style="display:none" onchange="handleExtraAdd('after',this)">
+<input type="file" id="extra-retake-input" accept="image/*" capture="environment" style="display:none" onchange="handleExtraRetake(this)">
+
+<!-- Bottom bar: next step -->
+<div class="bottom-bar">
+  <button class="btn-big" id="next-btn" style="margin:0;padding:14px;background:var(--blue);color:#fff;border-radius:12px;font-size:15px" onclick="nextStep()">下一步</button>
+</div>
+
+<script>
+const API = window.location.origin;
+const ORDER_ID = window.location.pathname.split('/').pop();
+let order = null;
+let currentStep = 0;
+let photoUploads = {}; // key -> File|true  (required photos)
+let sigDrawing = false, sigCtx, sigCanvas;
+// Extra photos: { before: [{file,url}, ...], after: [...] }
+const extraPhotos = { before: [], after: [] };
+const MAX_EXTRA = 10;
+let _extraRetake = null; // {type, index} pending retake
+const BEFORE_PHOTOS = ['車輛引擎號碼照','車頭正面','車尾正面','左側面','右側面'];
+let ITEM_PHOTOS = {}; // 從 API 動態載入
+
+// ── Load accessories from API ────────────────────────────
+async function loadAccessories(){
+  try{
+    const res = await fetch(`${API}/api/accessories`);
+    const list = await res.json();
+    ITEM_PHOTOS = {};
+    list.forEach(a=>{ ITEM_PHOTOS[a.name] = a.photos; });
+  }catch(e){ console.warn('無法載入配件清單，使用空清單'); }
+}
+
+// ── Load order ──────────────────────────────────────────
+async function loadOrder(){
+  try{
+    await loadAccessories();
+    const res = await fetch(`${API}/api/orders/${ORDER_ID}`);
+    if(!res.ok) throw new Error('工單不存在');
+    order = await res.json();
+    renderOrder();
+  }catch(e){
+    document.getElementById('loading-0').innerHTML=`<div style="color:var(--red);padding:24px;text-align:center">${e.message}</div>`;
+  }
+}
+
+function renderOrder(){
+  document.getElementById('loading-0').style.display='none';
+  document.getElementById('order-info').style.display='block';
+  document.getElementById('hdr-order-id').textContent = order.order_id;
+  document.getElementById('hdr-plate').textContent = `${order.car_no}  ${order.car_type||''}`;
+  document.getElementById('d-oid').textContent = order.order_id;
+  document.getElementById('d-car-no').textContent = order.car_no;
+  document.getElementById('d-engine').textContent = order.engine_no||'—';
+  document.getElementById('d-car-type').textContent = order.car_type||'—';
+  document.getElementById('d-location').textContent = order.location||'—';
+  document.getElementById('d-items').textContent = order.items||'—';
+  if(order.note){ document.getElementById('note-box').style.display='block'; document.getElementById('d-note').textContent=order.note; }
+  if(order.status==='退回'){
+    document.getElementById('reject-alert').style.display='block';
+    document.getElementById('reject-alert').textContent='⚠ 工單退回：'+order.reject_reason;
+  }
+  if(order.arrived_at){
+    document.getElementById('arrived-box').style.display='block';
+    document.getElementById('d-arrived').textContent=order.arrived_at;
+    document.getElementById('arrive-btn').disabled=true;
+    document.getElementById('arrive-btn').textContent='已到達現場';
+  }
+  // Build before photos
+  document.getElementById('before-photos').innerHTML = BEFORE_PHOTOS.map(p=>photoSlot('before:'+p, p)).join('');
+  renderExtraSection('before');
+  // Build after photos from items
+  const items = (order.items||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let afterHTML='';
+  items.forEach(item=>{
+    const ps = ITEM_PHOTOS[item];
+    if(!ps){ afterHTML+=photoSlot('after:other:'+item, item+'（安裝照）'); return; }
+    afterHTML+=`<div class="photo-section"><div class="photo-sec-title">${item}</div>`;
+    ps.forEach(p=>{ afterHTML+=photoSlot('after:'+item+':'+p, p); });
+    afterHTML+='</div>';
+  });
+  if(!afterHTML) afterHTML='<p style="color:var(--text3);font-size:13px;margin-bottom:4px">此工單無必要完工照</p>';
+  document.getElementById('after-photos').innerHTML=afterHTML;
+  renderExtraSection('after');
+  // Confirm page
+  document.getElementById('confirm-plate').textContent=order.car_no;
+  document.getElementById('confirm-oid').textContent=order.order_id;
+  // Sig canvas
+  initSig();
+}
+
+function photoSlot(key, label){
+  const preview = photoUploads[key] instanceof File
+    ? `<img class="preview-thumb" src="${URL.createObjectURL(photoUploads[key])}">`
+    : (photoUploads[key]===true ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>` : '');
+  const done = !!photoUploads[key];
+  return `
+  <label class="photo-upload-btn ${done?'done':''}" for="ph-${CSS.escape(key)}">
+    ${done
+      ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+      : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`}
+    <div class="upload-label">
+      <span>${done ? label+' ✓' : '拍攝 '+label}</span>
+      <small>${done ? '點擊重拍' : '點擊開啟相機'}</small>
+    </div>
+    ${done && photoUploads[key] instanceof File ? `<img class="preview-thumb" src="${URL.createObjectURL(photoUploads[key])}">` : ''}
+  </label>
+  <input id="ph-${CSS.escape(key)}" type="file" accept="image/*" capture="environment" onchange="handlePhoto('${key}', this)">`;
+}
+
+function handlePhoto(key, input){
+  const file = input.files[0];
+  if(!file) return;
+  photoUploads[key] = file;
+  // Re-render only the triggering slot (to avoid wiping extra photos state)
+  const section = key.startsWith('before') ? 'before-photos' : 'after-photos';
+  const container = document.getElementById(section);
+  if(container){
+    if(section==='before-photos'){
+      container.innerHTML = BEFORE_PHOTOS.map(p=>photoSlot('before:'+p, p)).join('');
+    } else {
+      const items = (order.items||'').split(',').map(s=>s.trim()).filter(Boolean);
+      let html='';
+      items.forEach(item=>{
+        const ps = ITEM_PHOTOS[item];
+        if(!ps){ html+=photoSlot('after:other:'+item, item+'（安裝照）'); return; }
+        html+=`<div class="photo-section"><div class="photo-sec-title">${item}</div>`;
+        ps.forEach(p=>{ html+=photoSlot('after:'+item+':'+p, p); });
+        html+='</div>';
+      });
+      container.innerHTML = html || '<p style="color:var(--text3);font-size:13px;margin-bottom:4px">此工單無必要完工照</p>';
+    }
+  }
+  updatePhotoCount();
+}
+
+function updatePhotoCount(){
+  const required = Object.values(photoUploads).filter(Boolean).length;
+  const extra = extraPhotos.before.length + extraPhotos.after.length;
+  document.getElementById('photo-count').textContent = (required + extra) + ' 張';
+}
+
+// ── Extra photo management ───────────────────────────────
+function renderExtraSection(type){
+  const el = document.getElementById('extra-'+type);
+  if(!el) return;
+  const arr = extraPhotos[type];
+  const canAdd = arr.length < MAX_EXTRA;
+  const label = type==='before' ? '施工前其它照片' : '完工其它照片';
+
+  let html = `<div class="extra-section-hd">
+    <span>${label}</span>
+    <small>${arr.length} / ${MAX_EXTRA} 張</small>
+  </div>
+  <div class="extra-grid">`;
+
+  arr.forEach((p, i) => {
+    html += `<div class="extra-thumb-wrap">
+      <img src="${p.url}" loading="lazy">
+      <button class="extra-del" onclick="removeExtraPhoto('${type}',${i})" title="刪除">✕</button>
+      <button class="extra-retake-btn" onclick="retakeExtraPhoto('${type}',${i})">重拍</button>
+    </div>`;
+  });
+
+  if(canAdd){
+    html += `<button class="extra-add-card" onclick="document.getElementById('extra-input-${type}').click()">
+      <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>新增照片</span>
+      <small>最多 ${MAX_EXTRA} 張</small>
+    </button>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function handleExtraAdd(type, input){
+  const remaining = MAX_EXTRA - extraPhotos[type].length;
+  const files = Array.from(input.files).slice(0, remaining);
+  files.forEach(file => {
+    extraPhotos[type].push({ file, url: URL.createObjectURL(file) });
+  });
+  input.value = '';
+  renderExtraSection(type);
+  updatePhotoCount();
+}
+
+function removeExtraPhoto(type, index){
+  const removed = extraPhotos[type].splice(index, 1)[0];
+  if(removed?.url) URL.revokeObjectURL(removed.url);
+  renderExtraSection(type);
+  updatePhotoCount();
+}
+
+function retakeExtraPhoto(type, index){
+  _extraRetake = { type, index };
+  document.getElementById('extra-retake-input').click();
+}
+
+function handleExtraRetake(input){
+  const file = input.files[0];
+  if(!file || !_extraRetake) return;
+  const { type, index } = _extraRetake;
+  _extraRetake = null;
+  input.value = '';
+  if(extraPhotos[type][index]?.url) URL.revokeObjectURL(extraPhotos[type][index].url);
+  extraPhotos[type][index] = { file, url: URL.createObjectURL(file) };
+  renderExtraSection(type);
+  updatePhotoCount();
+}
+
+// ── Step navigation ──────────────────────────────────────
+function gotoStep(i){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('step-'+i).classList.add('active');
+  document.querySelectorAll('.step-pill').forEach((p,j)=>{
+    p.classList.toggle('active', j===i);
+    if(j<i) p.classList.add('done');
+  });
+  currentStep=i;
+  document.getElementById('next-btn').style.display = i===3?'none':'block';
+  document.getElementById('next-btn').textContent = ['前往施工前拍照','前往完工拍照','前往完工確認',''][i]||'下一步';
+}
+
+function nextStep(){ if(currentStep<3) gotoStep(currentStep+1); }
+
+// ── Arrive ──────────────────────────────────────────────
+async function doArrive(){
+  const btn=document.getElementById('arrive-btn');
+  btn.disabled=true; btn.textContent='記錄中...';
+  try{
+    const res=await fetch(`${API}/api/orders/${ORDER_ID}/arrive`,{method:'POST'});
+    const d=await res.json();
+    if(res.ok){
+      document.getElementById('arrived-box').style.display='block';
+      document.getElementById('d-arrived').textContent=d.arrived_at;
+      btn.textContent='已到達現場 ✓';
+    }else{ btn.disabled=false; btn.textContent='重試'; }
+  }catch(e){ btn.disabled=false; btn.textContent='重試'; }
+}
+
+// ── Upload & Submit ──────────────────────────────────────
+async function uploadAllPhotos(){
+  let done=0;
+  // Required photos
+  const entries = Object.entries(photoUploads).filter(([,v])=>v instanceof File);
+  for(const [key, file] of entries){
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('photo_type', key.startsWith('before') ? 'before' : 'after');
+    try{
+      const res=await fetch(`${API}/api/orders/${ORDER_ID}/photos`,{method:'POST',body:fd});
+      if(res.ok){ photoUploads[key]=true; done++; }
+    }catch(e){ console.warn('upload failed',key,e); }
+  }
+  // Extra photos (before & after)
+  for(const type of ['before','after']){
+    for(let i=0;i<extraPhotos[type].length;i++){
+      const p = extraPhotos[type][i];
+      if(!(p.file instanceof File)) continue;
+      const fd = new FormData();
+      fd.append('file', p.file, p.file.name);
+      fd.append('photo_type', type);
+      try{
+        const res=await fetch(`${API}/api/orders/${ORDER_ID}/photos`,{method:'POST',body:fd});
+        if(res.ok){ extraPhotos[type][i] = { ...p, file: true }; done++; }
+      }catch(e){ console.warn('upload extra failed',type,i,e); }
+    }
+  }
+  return done;
+}
+
+async function doSubmit(){
+  const btn=document.getElementById('submit-btn');
+  btn.disabled=true; btn.textContent='上傳中...';
+  const n=await uploadAllPhotos();
+  btn.textContent='提交完工確認...';
+  try{
+    const res=await fetch(`${API}/api/orders/${ORDER_ID}/submit`,{method:'POST'});
+    if(res.ok){
+      btn.style.display='none';
+      document.getElementById('submit-done').style.display='block';
+      document.querySelectorAll('.step-pill').forEach(p=>p.classList.add('done'));
+    }else{
+      const d=await res.json();
+      btn.disabled=false; btn.textContent='重試提交';
+      alert(d.error);
+    }
+  }catch(e){ btn.disabled=false; btn.textContent='重試提交'; }
+}
+
+// ── Signature canvas ─────────────────────────────────────
+function initSig(){
+  sigCanvas = document.getElementById('sig-canvas');
+  if(!sigCanvas) return;
+  sigCtx = sigCanvas.getContext('2d');
+  sigCanvas.width = sigCanvas.offsetWidth;
+  sigCanvas.height = 160;
+  sigCtx.strokeStyle='#185FA5'; sigCtx.lineWidth=2.5; sigCtx.lineCap='round'; sigCtx.lineJoin='round';
+  sigCanvas.addEventListener('pointerdown', e=>{ sigDrawing=true; sigCtx.beginPath(); sigCtx.moveTo(...pos(e)); e.preventDefault(); });
+  sigCanvas.addEventListener('pointermove', e=>{ if(!sigDrawing) return; sigCtx.lineTo(...pos(e)); sigCtx.stroke(); e.preventDefault(); });
+  sigCanvas.addEventListener('pointerup', ()=>sigDrawing=false);
+}
+function pos(e){ const r=sigCanvas.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
+function clearSig(){ if(sigCtx) sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); }
+
+// Init
+loadOrder();
+</script>
+</body>
+</html>

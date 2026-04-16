@@ -1,0 +1,28 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - FLASK_ENV=production
+      - BASE_URL=${BASE_URL:-http://localhost:5000}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-change-me}
+      - SECRET_KEY=${SECRET_KEY:-change-me-secret}
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN:-}
+      - LINE_TARGET_ID=${LINE_TARGET_ID:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAX_PHOTO_MB=${MAX_PHOTO_MB:-10}
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
