@@ -552,8 +552,108 @@ function initSig(){
 function pos(e){ const r=sigCanvas.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
 function clearSig(){ if(sigCtx) sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); }
 
-// Init
-loadOrder();
+// ── LINE 瀏覽器偵測與引導 ───────────────────────────────────
+(function(){
+  const ua = navigator.userAgent;
+  const isLine = /Line\//i.test(ua);
+  if(!isLine) { loadOrder(); return; }
+
+  // 在 LINE 瀏覽器中：顯示引導畫面，不載入工單（相機無法使用）
+  const isIOS     = /iPad|iPhone|iPod/.test(ua);
+  const isAndroid = /Android/.test(ua);
+  const url = location.href;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'line-overlay';
+  overlay.style.cssText = [
+    'position:fixed','inset:0','z-index:99999',
+    'background:#fff','display:flex','flex-direction:column',
+    'align-items:center','justify-content:center',
+    'padding:32px 24px','text-align:center','font-family:Noto Sans TC,system-ui,sans-serif'
+  ].join(';');
+
+  const androidBtn = isAndroid ? `
+    <button onclick="window.__openChrome()" style="
+      background:#185FA5;color:#fff;border:none;border-radius:14px;
+      padding:16px;font-size:15px;font-weight:700;width:100%;
+      margin-bottom:10px;font-family:inherit;cursor:pointer;display:flex;
+      align-items:center;justify-content:center;gap:8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      在 Chrome 中開啟
+    </button>` : '';
+
+  const iosBtn = isIOS ? `
+    <button onclick="window.__openSafari()" style="
+      background:#185FA5;color:#fff;border:none;border-radius:14px;
+      padding:16px;font-size:15px;font-weight:700;width:100%;
+      margin-bottom:10px;font-family:inherit;cursor:pointer;display:flex;
+      align-items:center;justify-content:center;gap:8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      在 Safari 中開啟
+    </button>` : '';
+
+  const copyBtn = `
+    <button onclick="window.__copyUrl(this)" style="
+      background:#f2f4f8;color:#1a1d23;border:1px solid #e0e4ec;border-radius:14px;
+      padding:14px;font-size:14px;font-weight:500;width:100%;
+      margin-bottom:10px;font-family:inherit;cursor:pointer">
+      複製連結
+    </button>`;
+
+  overlay.innerHTML = `
+    <div style="font-size:56px;margin-bottom:18px;line-height:1">📷</div>
+    <h2 style="font-size:20px;font-weight:700;color:#1a1d23;margin-bottom:10px">需要在外部瀏覽器開啟</h2>
+    <p style="font-size:14px;color:#5a6175;line-height:1.8;margin-bottom:24px">
+      LINE 內建瀏覽器限制相機存取。<br>
+      請使用外部瀏覽器（Chrome / Safari）<br>開啟此頁面以正常拍照。
+    </p>
+    ${androidBtn}${iosBtn}${copyBtn}
+    <div style="background:#f2f4f8;border-radius:10px;padding:10px 14px;width:100%;
+      font-size:11px;color:#5a6175;word-break:break-all;text-align:left;margin-bottom:14px">
+      ${url}
+    </div>
+    <p style="font-size:12px;color:#9aa0b2;line-height:1.7">
+      或點擊 LINE 右上角 <strong>⋯</strong><br>→ 選擇「在瀏覽器中開啟」
+    </p>`;
+
+  document.body.appendChild(overlay);
+
+  // Android → Chrome Intent URL
+  window.__openChrome = function(){
+    const intentUrl = 'intent://' + url.replace(/^https?:\/\//,'') +
+      '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' +
+      encodeURIComponent(url) + ';end';
+    location.href = intentUrl;
+  };
+
+  // iOS → 嘗試用 window.open 開 Safari（LINE iOS 支援）
+  window.__openSafari = function(){
+    const w = window.open(url, '_blank');
+    // 若被封鎖，退而顯示提示
+    setTimeout(()=>{
+      if(!w || w.closed){
+        alert('請點擊 LINE 右上角 ⋯ → 在瀏覽器中開啟');
+      }
+    }, 1000);
+  };
+
+  // 複製連結
+  window.__copyUrl = function(btn){
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url).then(()=>{
+        btn.textContent='✓ 已複製！'; setTimeout(()=>btn.textContent='複製連結', 2000);
+      });
+    } else {
+      // 舊版fallback
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent='✓ 已複製！'; setTimeout(()=>btn.textContent='複製連結', 2000);
+    }
+  };
+})();
 </script>
 </body>
 </html>
