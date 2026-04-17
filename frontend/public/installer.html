@@ -298,8 +298,7 @@ function renderOrder(){
   // Confirm page
   document.getElementById('confirm-plate').textContent=order.car_no;
   document.getElementById('confirm-oid').textContent=order.order_id;
-  // Sig canvas
-  initSig();
+  // 不在此初始化簽名畫布（step-3 尚隱藏，offsetWidth=0）
 }
 
 function photoSlot(key, label){
@@ -468,6 +467,7 @@ function gotoStep(i){
   currentStep=i;
   document.getElementById('next-btn').style.display = i===3?'none':'block';
   document.getElementById('next-btn').textContent = ['前往施工前拍照','前往完工拍照','前往完工確認',''][i]||'下一步';
+  if(i===3) initSig(); // step-3 已顯示，此時 offsetWidth 有正確值
 }
 
 function nextStep(){ if(currentStep<3) gotoStep(currentStep+1); }
@@ -538,19 +538,58 @@ async function doSubmit(){
 }
 
 // ── Signature canvas ─────────────────────────────────────
+let _sigListened = false;
 function initSig(){
   sigCanvas = document.getElementById('sig-canvas');
   if(!sigCanvas) return;
+
+  // 依 devicePixelRatio 設定實際像素尺寸，避免 Retina 模糊
+  const dpr = window.devicePixelRatio || 1;
+  const w   = sigCanvas.offsetWidth  || 300;
+  const h   = 200;
+  sigCanvas.width  = w * dpr;
+  sigCanvas.height = h * dpr;
+  sigCanvas.style.height = h + 'px';
+
   sigCtx = sigCanvas.getContext('2d');
-  sigCanvas.width = sigCanvas.offsetWidth;
-  sigCanvas.height = 160;
-  sigCtx.strokeStyle='#185FA5'; sigCtx.lineWidth=2.5; sigCtx.lineCap='round'; sigCtx.lineJoin='round';
-  sigCanvas.addEventListener('pointerdown', e=>{ sigDrawing=true; sigCtx.beginPath(); sigCtx.moveTo(...pos(e)); e.preventDefault(); });
-  sigCanvas.addEventListener('pointermove', e=>{ if(!sigDrawing) return; sigCtx.lineTo(...pos(e)); sigCtx.stroke(); e.preventDefault(); });
-  sigCanvas.addEventListener('pointerup', ()=>sigDrawing=false);
+  sigCtx.scale(dpr, dpr);
+  sigCtx.strokeStyle = '#185FA5';
+  sigCtx.lineWidth   = 3;
+  sigCtx.lineCap     = 'round';
+  sigCtx.lineJoin    = 'round';
+  sigDrawing = false;
+
+  // 只綁一次，避免切步驟重複堆疊監聽器
+  if(!_sigListened){
+    _sigListened = true;
+    sigCanvas.addEventListener('pointerdown', e=>{
+      sigDrawing = true;
+      sigCtx.beginPath();
+      sigCtx.moveTo(...sigPos(e));
+      e.preventDefault();
+    });
+    sigCanvas.addEventListener('pointermove', e=>{
+      if(!sigDrawing) return;
+      sigCtx.lineTo(...sigPos(e));
+      sigCtx.stroke();
+      e.preventDefault();
+    });
+    // 手指離開 / 被系統取消 → 停止繪製
+    ['pointerup','pointercancel','pointerleave'].forEach(ev=>
+      sigCanvas.addEventListener(ev, ()=>{ sigDrawing=false; })
+    );
+  }
 }
-function pos(e){ const r=sigCanvas.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
-function clearSig(){ if(sigCtx) sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height); }
+function sigPos(e){
+  const r = sigCanvas.getBoundingClientRect();
+  // 座標已在 ctx.scale(dpr,dpr) 後為 CSS pixel，直接減去 rect 即可
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+function clearSig(){
+  if(!sigCtx) return;
+  const dpr = window.devicePixelRatio || 1;
+  sigCtx.clearRect(0, 0, sigCanvas.width/dpr, sigCanvas.height/dpr);
+}
 
 // ── LINE 瀏覽器偵測與引導 ───────────────────────────────────
 (function(){
