@@ -1181,7 +1181,7 @@ function renderOrderDetail(){
     ['建立時間', o.created_at],
     ['到場時間', o.arrived_at],
     ['完工時間', o.completed_at],
-  ].filter(([,v])=>v).map(([k,v])=>`<div><span style="color:var(--text3)">${k}：</span>${v}</div>`).join('');
+  ].filter(([,v])=>v).map(([k,v])=>`<div><span style="color:var(--text3)">${k}：</span>${fmtTW(v)}</div>`).join('');
 
   // 操作按鈕（依狀態）
   let btns = '';
