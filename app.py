@@ -31,17 +31,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
+# ── 資料持久化路徑（Railway Volume 請設 DATA_DIR=/data）────
+DATA_DIR      = os.getenv("DATA_DIR", ".")          # 持久 Volume 掛載點，預設當前目錄（本機開發）
+DB_PATH       = os.path.join(DATA_DIR, "install.db")
+UPLOAD_FOLDER = os.path.join(DATA_DIR, os.getenv("UPLOAD_FOLDER", "uploads"))
+
 MAX_PHOTO_MB   = int(os.getenv("MAX_PHOTO_MB", "10"))
 ADMIN_TOKEN    = os.getenv("ADMIN_TOKEN", "change-me-in-production")
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")   # LINE Messaging API Channel Access Token
-LINE_TARGET_ID            = os.getenv("LINE_TARGET_ID", "")              # 預設推送目標：群組 ID 或 user ID（後台/廠務接收通知用）
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+LINE_TARGET_ID            = os.getenv("LINE_TARGET_ID", "")
 SMTP_HOST      = os.getenv("SMTP_HOST", "")
 SMTP_PORT      = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER      = os.getenv("SMTP_USER", "")
 SMTP_PASS      = os.getenv("SMTP_PASS", "")
 ALLOWED_MIME   = {"image/jpeg", "image/png", "image/webp"}
-BASE_URL        = os.getenv("BASE_URL", "http://localhost:5000")
+BASE_URL       = os.getenv("BASE_URL", "http://localhost:5000")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -50,7 +54,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # ── 資料庫 ─────────────────────────────────────────────────
 def get_db():
     if "db" not in g:
-        conn = sqlite3.connect("install.db")
+        conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         g.db = conn
@@ -63,7 +67,7 @@ def close_db(error):
         db.close()
 
 def init_db():
-    with sqlite3.connect("install.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             line_id   TEXT PRIMARY KEY,
