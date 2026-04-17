@@ -357,8 +357,9 @@ function renderOrder(){
   document.getElementById('confirm-oid').textContent=order.order_id;
   // 不在此初始化簽名畫布（step-3 尚隱藏，offsetWidth=0）
 
-  // 已完成/已作廢 → 在 step-0 顯示照片查詢卡（待審核改在 step-3 顯示）
-  if(['已完成','已作廢'].includes(order.status)){
+  // 已完成/已作廢/退回 → 在 step-0 顯示照片查詢卡
+  // （退回讓技師確認之前上傳的照片，待審核改在 step-3 顯示）
+  if(['已完成','已作廢','退回'].includes(order.status)){
     document.getElementById('inst-photos-card').style.display='block';
     loadInstallerPhotos('inst-photos-body');
   }
