@@ -1033,21 +1033,13 @@ def update_setting(key):
 
 def generate_order_id() -> str:
     """
-    產生 前碼(≤4碼) + 中碼(≤8碼) + 後碼(流水號) 格式工單號
-    例：前碼=B, 中碼=20260416, 後碼5位 → B2026041600001
+    固定格式：R + 西元年(4碼) + 月(2碼) + 流水號(5碼)
+    例：2026年4月第1單 → R20260400001
     """
-    db = get_db()
-    def _get(key, default):
-        row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-        return row[0] if row else default
-
-    front  = (_get("order_front", "B").strip() or "B")[:4]
-    middle = (_get("order_middle", "2026").strip() or "")[:8]
-    digits = max(1, min(10, int(_get("order_suffix_digits", "5") or 5)))
-
-    prefix = f"{front}{middle}"
+    now    = datetime.now()
+    prefix = f"R{now.year}{now.month:02d}"   # e.g. R202604
     pattern = f"{prefix}%"
-
+    db  = get_db()
     row = db.execute(
         "SELECT order_id FROM orders WHERE order_id LIKE ? ORDER BY order_id DESC LIMIT 1",
         (pattern,)
@@ -1059,7 +1051,7 @@ def generate_order_id() -> str:
             seq = 1
     else:
         seq = 1
-    return f"{prefix}{seq:0{digits}d}"
+    return f"{prefix}{seq:05d}"
 
 
 # ══════════════════════════════════════════════════════════════
