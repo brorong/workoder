@@ -364,13 +364,14 @@ def update_account(acc_id):
     params.append(acc_id)
     db.execute(f"UPDATE accounts SET {','.join(sets)} WHERE id=?", params)
     db.commit()
-    # 更新記憶體中的 session
+    # 同步更新 login_sessions（display_name / role 若有變更）
     acc = db.execute("SELECT * FROM accounts WHERE id=?", (acc_id,)).fetchone()
     if acc:
-        for tk, info in list(_sessions.items()):
-            if info["id"] == acc_id:
-                _sessions[tk] = {"id": acc["id"], "username": acc["username"],
-                                 "display_name": acc["display_name"], "role": acc["role"]}
+        db.execute(
+            "UPDATE login_sessions SET display_name=?, role=? WHERE account_id=?",
+            (acc["display_name"], acc["role"], acc_id)
+        )
+        db.commit()
     return jsonify({"ok": True})
 
 
@@ -383,10 +384,9 @@ def delete_account(acc_id):
     if not db.execute("SELECT 1 FROM accounts WHERE id=?", (acc_id,)).fetchone():
         return jsonify({"error": "帳號不存在"}), 404
     db.execute("DELETE FROM accounts WHERE id=?", (acc_id,))
+    # 同步刪除該帳號的所有 login_sessions（強制登出）
+    db.execute("DELETE FROM login_sessions WHERE account_id=?", (acc_id,))
     db.commit()
-    for tk, info in list(_sessions.items()):
-        if info["id"] == acc_id:
-            del _sessions[tk]
     return jsonify({"ok": True})
 
 
@@ -707,11 +707,12 @@ def order_arrive(order_id):
 def submit_order(order_id):
     db  = get_db()
     row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
-    if not row or row["status"] != "施工中":
-        return jsonify({"error": "狀態不符，無法提交"}), 400
+    # 允許 施工中（正常完工）或 退回（技師重新送出）
+    if not row or row["status"] not in ("施工中", "退回"):
+        return jsonify({"error": f"狀態「{row['status'] if row else '?'}」無法提交"}), 400
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.execute(
-        "UPDATE orders SET status='待審核', completed_at=? WHERE order_id=?",
+        "UPDATE orders SET status='待審核', completed_at=?, reject_reason='' WHERE order_id=?",
         (ts, order_id)
     )
     db.commit()
@@ -786,7 +787,8 @@ def void_order(order_id):
 def recall_order(order_id):
     db = get_db()
     db.execute(
-        "UPDATE orders SET installer_id='',status='待派工',reject_reason='' WHERE order_id=?",
+        "UPDATE orders SET installer_id='',status='待派工',reject_reason='',"
+        "arrived_at='',completed_at='' WHERE order_id=?",
         (order_id,)
     )
     db.commit()
