@@ -89,6 +89,15 @@ input[type=file]{display:none}
 .extra-add-card{border:1.5px dashed var(--border2);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;padding:14px 8px;text-align:center;font-family:var(--sans);aspect-ratio:4/3}
 .extra-add-card:active{background:var(--blue-bg);border-color:var(--blue)}
 .extra-add-card svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5}
+/* Camera modal */
+.cam-modal{display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;align-items:center}
+.cam-modal.open{display:flex}
+#cam-video{width:100%;flex:1;object-fit:cover}
+.cam-bar{position:absolute;bottom:0;left:0;right:0;padding:20px 24px 44px;display:flex;align-items:center;justify-content:center;gap:28px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.cam-side-btn{width:52px;height:52px;background:rgba(255,255,255,.18);color:#fff;border:2px solid rgba(255,255,255,.55);border-radius:50%;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.cam-shutter{width:72px;height:72px;background:#fff;border:5px solid rgba(255,255,255,.75);border-radius:50%;cursor:pointer;box-shadow:0 0 0 3px rgba(255,255,255,.3)}
+.cam-shutter:active{transform:scale(.94)}
+.cam-hint{position:absolute;top:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.8);font-size:13px;pointer-events:none}
 </style>
 </head>
 <body>
@@ -182,10 +191,21 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- Hidden inputs for extra photos -->
-<input type="file" id="extra-input-before" accept="image/*" capture="environment" multiple style="display:none" onchange="handleExtraAdd('before',this)">
-<input type="file" id="extra-input-after"  accept="image/*" capture="environment" multiple style="display:none" onchange="handleExtraAdd('after',this)">
-<input type="file" id="extra-retake-input" accept="image/*" capture="environment" style="display:none" onchange="handleExtraRetake(this)">
+<!-- Camera modal (getUserMedia — works inside LINE browser) -->
+<div class="cam-modal" id="cam-modal">
+  <div class="cam-hint" id="cam-hint"></div>
+  <video id="cam-video" playsinline autoplay muted></video>
+  <div class="cam-bar">
+    <button class="cam-side-btn" onclick="closeCamera()">✕</button>
+    <button class="cam-shutter"  onclick="camCapture()"></button>
+    <button class="cam-side-btn" onclick="switchCamera()">🔄</button>
+  </div>
+</div>
+<canvas id="cam-canvas" style="display:none"></canvas>
+<!-- Fallback file inputs (no capture attr — used only when getUserMedia is unavailable) -->
+<input type="file" id="fb-photo"  accept="image/*" style="display:none" onchange="_fbPhotoChange(this)">
+<input type="file" id="fb-extra"  accept="image/*" style="display:none" onchange="_fbExtraChange(this)">
+<input type="file" id="fb-retake" accept="image/*" style="display:none" onchange="_fbRetakeChange(this)">
 
 <!-- Bottom bar: next step -->
 <div class="bottom-bar">
@@ -275,12 +295,12 @@ function renderOrder(){
 }
 
 function photoSlot(key, label){
-  const preview = photoUploads[key] instanceof File
-    ? `<img class="preview-thumb" src="${URL.createObjectURL(photoUploads[key])}">`
-    : (photoUploads[key]===true ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>` : '');
   const done = !!photoUploads[key];
+  const thumb = done && photoUploads[key] instanceof File
+    ? `<img class="preview-thumb" src="${URL.createObjectURL(photoUploads[key])}">`
+    : '';
   return `
-  <label class="photo-upload-btn ${done?'done':''}" for="ph-${CSS.escape(key)}">
+  <div class="photo-upload-btn ${done?'done':''}" onclick='captureRequiredPhoto(${JSON.stringify(key)})' style="cursor:pointer">
     ${done
       ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
       : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`}
@@ -288,36 +308,38 @@ function photoSlot(key, label){
       <span>${done ? label+' ✓' : '拍攝 '+label}</span>
       <small>${done ? '點擊重拍' : '點擊開啟相機'}</small>
     </div>
-    ${done && photoUploads[key] instanceof File ? `<img class="preview-thumb" src="${URL.createObjectURL(photoUploads[key])}">` : ''}
-  </label>
-  <input id="ph-${CSS.escape(key)}" type="file" accept="image/*" capture="environment" onchange="handlePhoto('${key}', this)">`;
+    ${thumb}
+  </div>`;
 }
 
-function handlePhoto(key, input){
-  const file = input.files[0];
-  if(!file) return;
-  photoUploads[key] = file;
-  // Re-render only the triggering slot (to avoid wiping extra photos state)
-  const section = key.startsWith('before') ? 'before-photos' : 'after-photos';
-  const container = document.getElementById(section);
-  if(container){
-    if(section==='before-photos'){
-      container.innerHTML = BEFORE_PHOTOS.map(p=>photoSlot('before:'+p, p)).join('');
-    } else {
-      const items = (order.items||'').split(',').map(s=>s.trim()).filter(Boolean);
-      let html='';
-      items.forEach(item=>{
-        const ps = ITEM_PHOTOS[item];
-        if(!ps){ html+=photoSlot('after:other:'+item, item+'（安裝照）'); return; }
-        html+=`<div class="photo-section"><div class="photo-sec-title">${item}</div>`;
-        ps.forEach(p=>{ html+=photoSlot('after:'+item+':'+p, p); });
-        html+='</div>';
-      });
-      container.innerHTML = html || '<p style="color:var(--text3);font-size:13px;margin-bottom:4px">此工單無必要完工照</p>';
-    }
+function rebuildPhotoSection(sectionId){
+  const container = document.getElementById(sectionId);
+  if(!container) return;
+  if(sectionId==='before-photos'){
+    container.innerHTML = BEFORE_PHOTOS.map(p=>photoSlot('before:'+p, p)).join('');
+  } else {
+    const items = (order.items||'').split(',').map(s=>s.trim()).filter(Boolean);
+    let html='';
+    items.forEach(item=>{
+      const ps = ITEM_PHOTOS[item];
+      if(!ps){ html+=photoSlot('after:other:'+item, item+'（安裝照）'); return; }
+      html+=`<div class="photo-section"><div class="photo-sec-title">${item}</div>`;
+      ps.forEach(p=>{ html+=photoSlot('after:'+item+':'+p, p); });
+      html+='</div>';
+    });
+    container.innerHTML = html || '<p style="color:var(--text3);font-size:13px;margin-bottom:4px">此工單無必要完工照</p>';
   }
-  updatePhotoCount();
 }
+
+function captureRequiredPhoto(key){
+  openCamera(label(key), file => {
+    if(!file) return;
+    photoUploads[key] = file;
+    rebuildPhotoSection(key.startsWith('before') ? 'before-photos' : 'after-photos');
+    updatePhotoCount();
+  });
+}
+function label(key){ return key.split(':').pop(); }
 
 function updatePhotoCount(){
   const required = Object.values(photoUploads).filter(Boolean).length;
@@ -331,10 +353,10 @@ function renderExtraSection(type){
   if(!el) return;
   const arr = extraPhotos[type];
   const canAdd = arr.length < MAX_EXTRA;
-  const label = type==='before' ? '施工前其它照片' : '完工其它照片';
+  const sectionLabel = type==='before' ? '施工前其它照片' : '完工其它照片';
 
   let html = `<div class="extra-section-hd">
-    <span>${label}</span>
+    <span>${sectionLabel}</span>
     <small>${arr.length} / ${MAX_EXTRA} 張</small>
   </div>
   <div class="extra-grid">`;
@@ -348,7 +370,7 @@ function renderExtraSection(type){
   });
 
   if(canAdd){
-    html += `<button class="extra-add-card" onclick="document.getElementById('extra-input-${type}').click()">
+    html += `<button class="extra-add-card" onclick="captureExtraPhoto('${type}')">
       <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       <span>新增照片</span>
       <small>最多 ${MAX_EXTRA} 張</small>
@@ -358,15 +380,14 @@ function renderExtraSection(type){
   el.innerHTML = html;
 }
 
-function handleExtraAdd(type, input){
-  const remaining = MAX_EXTRA - extraPhotos[type].length;
-  const files = Array.from(input.files).slice(0, remaining);
-  files.forEach(file => {
+function captureExtraPhoto(type){
+  if(extraPhotos[type].length >= MAX_EXTRA) return;
+  openCamera(type==='before'?'施工前其它照片':'完工其它照片', file => {
+    if(!file) return;
     extraPhotos[type].push({ file, url: URL.createObjectURL(file) });
+    renderExtraSection(type);
+    updatePhotoCount();
   });
-  input.value = '';
-  renderExtraSection(type);
-  updatePhotoCount();
 }
 
 function removeExtraPhoto(type, index){
@@ -377,20 +398,79 @@ function removeExtraPhoto(type, index){
 }
 
 function retakeExtraPhoto(type, index){
-  _extraRetake = { type, index };
-  document.getElementById('extra-retake-input').click();
+  openCamera(type==='before'?'重拍施工前照片':'重拍完工照片', file => {
+    if(!file) return;
+    if(extraPhotos[type][index]?.url) URL.revokeObjectURL(extraPhotos[type][index].url);
+    extraPhotos[type][index] = { file, url: URL.createObjectURL(file) };
+    renderExtraSection(type);
+    updatePhotoCount();
+  });
 }
 
-function handleExtraRetake(input){
-  const file = input.files[0];
-  if(!file || !_extraRetake) return;
-  const { type, index } = _extraRetake;
-  _extraRetake = null;
-  input.value = '';
-  if(extraPhotos[type][index]?.url) URL.revokeObjectURL(extraPhotos[type][index].url);
-  extraPhotos[type][index] = { file, url: URL.createObjectURL(file) };
-  renderExtraSection(type);
-  updatePhotoCount();
+// ── Fallback file-input handlers (when getUserMedia unavailable) ──
+let _fbCallback = null;
+let _fbExtraCb  = null;
+let _fbRetakeCb = null;
+function _fbPhotoChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbCallback){_fbCallback(f);_fbCallback=null;} }
+function _fbExtraChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbExtraCb){_fbExtraCb(f);_fbExtraCb=null;} }
+function _fbRetakeChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbRetakeCb){_fbRetakeCb(f);_fbRetakeCb=null;} }
+
+// ── Camera engine (getUserMedia) ─────────────────────────────────
+let _camStream   = null;
+let _camFacing   = 'environment';
+let _camCallback = null;
+
+async function openCamera(hint, callback){
+  _camCallback = callback;
+  document.getElementById('cam-hint').textContent = hint || '';
+  // Try getUserMedia first (LINE browser, Chrome, Safari iOS 15+)
+  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    try{
+      if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
+      _camStream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:_camFacing, width:{ideal:1920}, height:{ideal:1080} }, audio:false
+      });
+      const v = document.getElementById('cam-video');
+      v.srcObject = _camStream;
+      await v.play();
+      document.getElementById('cam-modal').classList.add('open');
+      return;
+    }catch(e){ console.warn('getUserMedia failed, fallback to file input:', e); }
+  }
+  // Fallback: file input without capture (user can pick from gallery or camera)
+  _fbCallback = callback;
+  document.getElementById('fb-photo').click();
+}
+
+function camCapture(){
+  const v = document.getElementById('cam-video');
+  const c = document.getElementById('cam-canvas');
+  c.width  = v.videoWidth  || 1280;
+  c.height = v.videoHeight || 720;
+  c.getContext('2d').drawImage(v, 0, 0);
+  c.toBlob(blob => {
+    const file = new File([blob], `photo_${Date.now()}.jpg`, {type:'image/jpeg'});
+    closeCamera();
+    if(_camCallback){ _camCallback(file); _camCallback=null; }
+  }, 'image/jpeg', 0.92);
+}
+
+async function switchCamera(){
+  _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
+  if(!_camStream) return;
+  _camStream.getTracks().forEach(t=>t.stop());
+  try{
+    _camStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:_camFacing }, audio:false
+    });
+    document.getElementById('cam-video').srcObject = _camStream;
+  }catch(e){ console.warn('switchCamera failed:', e); }
+}
+
+function closeCamera(){
+  if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
+  document.getElementById('cam-modal').classList.remove('open');
+  _camCallback = null;
 }
 
 // ── Step navigation ──────────────────────────────────────
