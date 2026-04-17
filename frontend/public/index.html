@@ -1045,7 +1045,7 @@ async function doApprove(oid){
   try{
     const res=await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
     const d=await res.json().catch(()=>({}));
-    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); loadOrders(); }
+    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); refreshAll(); }
     else toast(`審核失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
@@ -1055,7 +1055,7 @@ async function doRecall(oid){
   try{
     const res=await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
     const d=await res.json().catch(()=>({}));
-    if(res.ok){ toast('已收回'); loadOrders(); }
+    if(res.ok){ toast('已收回'); refreshAll(); }
     else toast(`收回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
@@ -1310,7 +1310,7 @@ async function odAssign(){
   try{
     const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
     const d = await res.json().catch(()=>({}));
-    if(res.ok){ toast('派工成功，通知發送中'); addNotifyLog(`📤 ${_currentOrder.order_id} 已指派給 ${inst}`); await openOrderDetail(_currentOrder.order_id); loadOrders(); }
+    if(res.ok){ toast('派工成功，通知發送中'); addNotifyLog(`📤 ${_currentOrder.order_id} 已指派給 ${inst}`); await openOrderDetail(_currentOrder.order_id); refreshAll(); }
     else toast(d.error||'指派失敗', false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
   finally{ if(btn){ btn.textContent='指派並發送通知'; btn.disabled=false; } }
@@ -1322,7 +1322,7 @@ async function odRecall(){
   try{
     const res = await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
     const d = await res.json().catch(()=>({}));
-    if(res.ok){ toast('已收回'); await openOrderDetail(oid); loadOrders(); }
+    if(res.ok){ toast('已收回'); await openOrderDetail(oid); refreshAll(); }
     else toast(`收回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
@@ -1333,7 +1333,7 @@ async function odApprove(){
   try{
     const res = await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
     const d = await res.json().catch(()=>({}));
-    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); await openOrderDetail(oid); loadOrders(); }
+    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); await openOrderDetail(oid); refreshAll(); }
     else toast(`審核失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
@@ -1344,7 +1344,7 @@ async function doUnapprove(oid){
   try{
     const res=await fetch(`${API}/api/orders/${oid}/unapprove`,{method:'POST',headers:headers()});
     const d=await res.json().catch(()=>({}));
-    if(res.ok){ toast('已取消審核，退回待審核'); loadOrders(); }
+    if(res.ok){ toast('已取消審核，退回待審核'); refreshAll(); }
     else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
@@ -1355,14 +1355,25 @@ async function odUnapprove(){
   try{
     const res=await fetch(`${API}/api/orders/${oid}/unapprove`,{method:'POST',headers:headers()});
     const d=await res.json().catch(()=>({}));
-    if(res.ok){ toast('已取消審核'); await openOrderDetail(oid); loadOrders(); }
+    if(res.ok){ toast('已取消審核'); await openOrderDetail(oid); refreshAll(); }
     else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
 
+// ── 統一刷新（清單 + 儀表板保持同步）───────────────────────────
+function refreshAll(){ loadOrders(); loadDashboard(); }
+
 // ── 廢工單 ──────────────────────────────────────────────────
 let _voidFromDetail = false;
 function openVoid(oid, fromDetail=false){
+  // 前端 guard：已完成/已作廢 在開 modal 前直接攔截
+  const status = fromDetail ? _currentOrder?.status : null;
+  if(status === '已完成'){
+    toast('已完成工單請先「取消審核」後再作廢', false); return;
+  }
+  if(status === '已作廢'){
+    toast('此工單已作廢，無法重複操作', false); return;
+  }
   _voidFromDetail = fromDetail;
   document.getElementById('m-void-order-id').value = oid || _currentOrder?.order_id || '';
   document.getElementById('m-void-reason').value = '';
@@ -1377,7 +1388,7 @@ async function doVoid(){
     if(res.ok){
       toast('工單已作廢');
       if(_voidFromDetail) await openOrderDetail(oid);
-      loadOrders();
+      refreshAll();
     } else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
   closeModal('void-modal');
@@ -1400,7 +1411,7 @@ async function doReject(){
     if(res.ok){
       toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`);
       if(_rejectFromDetail) await openOrderDetail(oid);
-      loadOrders();
+      refreshAll();
     } else toast(`退回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
   closeModal('reject-modal');
