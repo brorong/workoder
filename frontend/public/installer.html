@@ -89,15 +89,6 @@ input[type=file]{display:none}
 .extra-add-card{border:1.5px dashed var(--border2);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;padding:14px 8px;text-align:center;font-family:var(--sans);aspect-ratio:4/3}
 .extra-add-card:active{background:var(--blue-bg);border-color:var(--blue)}
 .extra-add-card svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5}
-/* Camera modal (getUserMedia overlay) */
-.cam-modal{display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;align-items:center}
-.cam-modal.open{display:flex}
-#cam-video{width:100%;flex:1;object-fit:cover}
-.cam-bar{position:absolute;bottom:0;left:0;right:0;padding:20px 24px 44px;display:flex;align-items:center;justify-content:center;gap:28px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
-.cam-side-btn{width:52px;height:52px;background:rgba(255,255,255,.18);color:#fff;border:2px solid rgba(255,255,255,.55);border-radius:50%;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
-.cam-shutter{width:72px;height:72px;background:#fff;border:5px solid rgba(255,255,255,.75);border-radius:50%;cursor:pointer;box-shadow:0 0 0 3px rgba(255,255,255,.3)}
-.cam-shutter:active{transform:scale(.94)}
-.cam-hint{position:absolute;top:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.8);font-size:13px;pointer-events:none}
 /* Photo source bottom sheet */
 .src-sheet{display:none;position:fixed;inset:0;z-index:9998;align-items:flex-end}
 .src-sheet.open{display:flex}
@@ -201,18 +192,6 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- Camera modal (getUserMedia overlay) -->
-<div class="cam-modal" id="cam-modal">
-  <div class="cam-hint" id="cam-hint"></div>
-  <video id="cam-video" playsinline autoplay muted></video>
-  <div class="cam-bar">
-    <button class="cam-side-btn" onclick="closeCamera()">✕</button>
-    <button class="cam-shutter"  onclick="camCapture()"></button>
-    <button class="cam-side-btn" onclick="switchCamera()">🔄</button>
-  </div>
-</div>
-<canvas id="cam-canvas" style="display:none"></canvas>
-
 <!-- Photo source bottom sheet -->
 <div class="src-sheet" id="src-sheet">
   <div class="src-backdrop" onclick="closeSrcSheet()"></div>
@@ -229,9 +208,12 @@ input[type=file]{display:none}
     <button class="src-btn src-btn-cancel" onclick="closeSrcSheet()">取消</button>
   </div>
 </div>
-<!-- File inputs: with capture (camera) and without (gallery) -->
-<input type="file" id="fi-cam"     accept="image/*" capture="environment" style="display:none" onchange="_fiCamChange(this)">
-<input type="file" id="fi-gallery" accept="image/*"                       style="display:none" onchange="_fiGalleryChange(this)">
+<!--
+  capture="camera"   → 舊規格，直接喚起系統相機 APP（LINE/WebView 相容）
+  無 capture         → 讓使用者從相簿選擇
+-->
+<input type="file" id="fi-cam"     accept="image/*" capture="camera" style="display:none" onchange="_fiCamChange(this)">
+<input type="file" id="fi-gallery" accept="image/*"                  style="display:none" onchange="_fiGalleryChange(this)">
 
 <!-- Bottom bar: next step -->
 <div class="bottom-bar">
@@ -433,11 +415,14 @@ function retakeExtraPhoto(type, index){
   });
 }
 
-// ── Photo source sheet ───────────────────────────────────────────
-let _srcCallback = null;
+// ── Photo source bottom sheet ────────────────────────────────────
+// LINE In-App Browser 封鎖 getUserMedia，
+// 改用 capture="camera"（舊規格）直接喚起系統相機 APP。
+let _srcCallback      = null;
+let _fiCamPending     = null;
+let _fiGalleryPending = null;
 
 function openCamera(hint, callback){
-  // "openCamera" now shows a bottom sheet to choose camera vs gallery
   _srcCallback = callback;
   document.getElementById('src-title').textContent = hint || '選擇照片來源';
   document.getElementById('src-sheet').classList.add('open');
@@ -448,38 +433,21 @@ function closeSrcSheet(){
   _srcCallback = null;
 }
 
-// User chose "直接拍照"
-async function _srcCamera(){
-  closeSrcSheet();
-  // 1. Try getUserMedia (works in Chrome/Safari/Android LINE with camera permission)
-  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-    try{
-      await _openGumCamera(_srcCallback);
-      _srcCallback = null;
-      return;
-    }catch(e){
-      console.warn('getUserMedia failed:', e.name, e.message);
-    }
-  }
-  // 2. Fallback: <input capture="environment"> (works on iOS LINE, some Android)
+function _srcCamera(){
+  // capture="camera" → 系統相機 APP（LINE/Android/iOS WebView 均相容）
   _fiCamPending = _srcCallback;
-  _srcCallback  = null;
+  closeSrcSheet();
   document.getElementById('fi-cam').value = '';
   document.getElementById('fi-cam').click();
 }
 
-// User chose "從相簿選擇"
 function _srcGallery(){
-  const cb = _srcCallback;
+  _fiGalleryPending = _srcCallback;
   closeSrcSheet();
-  _fiGalleryPending = cb;
   document.getElementById('fi-gallery').value = '';
   document.getElementById('fi-gallery').click();
 }
 
-// File input handlers
-let _fiCamPending     = null;
-let _fiGalleryPending = null;
 function _fiCamChange(input){
   const f = input.files[0]; input.value = '';
   if(f && _fiCamPending){ _fiCamPending(f); _fiCamPending = null; }
@@ -487,52 +455,6 @@ function _fiCamChange(input){
 function _fiGalleryChange(input){
   const f = input.files[0]; input.value = '';
   if(f && _fiGalleryPending){ _fiGalleryPending(f); _fiGalleryPending = null; }
-}
-
-// ── getUserMedia camera overlay ──────────────────────────────────
-let _camStream   = null;
-let _camFacing   = 'environment';
-let _camCallback = null;
-
-async function _openGumCamera(callback){
-  if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
-  _camStream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:_camFacing, width:{ideal:1920}, height:{ideal:1080} }, audio:false
-  });
-  _camCallback = callback;
-  const v = document.getElementById('cam-video');
-  v.srcObject = _camStream;
-  await v.play();
-  document.getElementById('cam-modal').classList.add('open');
-}
-
-function camCapture(){
-  const v = document.getElementById('cam-video');
-  const c = document.getElementById('cam-canvas');
-  c.width  = v.videoWidth  || 1280;
-  c.height = v.videoHeight || 720;
-  c.getContext('2d').drawImage(v, 0, 0);
-  c.toBlob(blob => {
-    const file = new File([blob], `photo_${Date.now()}.jpg`, {type:'image/jpeg'});
-    closeCamera();
-    if(_camCallback){ _camCallback(file); _camCallback=null; }
-  }, 'image/jpeg', 0.92);
-}
-
-async function switchCamera(){
-  _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
-  if(!_camStream) return;
-  _camStream.getTracks().forEach(t=>t.stop());
-  try{
-    _camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:_camFacing }, audio:false });
-    document.getElementById('cam-video').srcObject = _camStream;
-  }catch(e){ console.warn('switchCamera failed:', e); }
-}
-
-function closeCamera(){
-  if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
-  document.getElementById('cam-modal').classList.remove('open');
-  _camCallback = null;
 }
 
 // ── Step navigation ──────────────────────────────────────
