@@ -78,6 +78,7 @@ textarea { min-height:70px; resize:vertical; }
 .acc-item:hover { border-color:var(--blue-mid); }
 .acc-item.on { border-color:var(--blue); background:var(--blue-bg); color:var(--blue); }
 .acc-item input { width:auto; margin:0; }
+.acc-item.acc-disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
 /* Btn */
 .btn { padding:9px 18px; border-radius:8px; font-size:13px; font-family:var(--sans); cursor:pointer; border:1px solid var(--border2); background:var(--surface); color:var(--text); font-weight:500; }
 .btn:hover { background:var(--surface2); }
@@ -874,7 +875,8 @@ function rowActions(o){
   }
   if(o.status==='已完成')
     btns+=`<button class="btn btn-sm" style="color:var(--amber)" onclick="doUnapprove('${o.order_id}')">取消審核</button>`;
-  if(o.status!=='已作廢')
+  // 已完成需先取消審核才能廢單；已作廢不可再操作
+  if(!['已完成','已作廢'].includes(o.status))
     btns+=`<button class="btn btn-sm" style="color:#888" onclick="openVoid('${o.order_id}')">廢單</button>`;
   btns+=`<button class="btn btn-sm" onclick="viewPhotos('${o.order_id}')">照片</button>`;
   return `<div class="btn-row">${btns}</div>`;
@@ -1148,6 +1150,9 @@ function renderOrderDetail(){
   document.getElementById('od-order-id-field').textContent = o.order_id;
   document.getElementById('od-status-badge').innerHTML = statusBadge(o.status);
 
+  // 已完成/已作廢 → 禁止修改
+  const readOnly = ['已完成','已作廢'].includes(o.status);
+
   // 填入可編輯欄位
   document.getElementById('od-source').value       = o.source||'';
   document.getElementById('od-car-no').value        = o.car_no||'';
@@ -1164,12 +1169,15 @@ function renderOrderDetail(){
   const grid = document.getElementById('od-acc-grid');
   grid.innerHTML = _accList.map(a=>{
     const on = checked.includes(a.name);
-    return `<label class="acc-item ${on?'on':''}">
-      <input type="checkbox" value="${a.name}" ${on?'checked':''}> ${a.name}
+    return `<label class="acc-item ${on?'on':''} ${readOnly?'acc-disabled':''}">
+      <input type="checkbox" value="${a.name}" ${on?'checked':''} ${readOnly?'disabled':''}> ${a.name}
     </label>`;
   }).join('');
   grid.querySelectorAll('.acc-item').forEach(item=>{
-    item.addEventListener('change',()=>item.classList.toggle('on',item.querySelector('input').checked));
+    item.addEventListener('change',()=>{
+      if(readOnly) return;
+      item.classList.toggle('on',item.querySelector('input').checked);
+    });
   });
 
   // 施工連結
@@ -1202,13 +1210,31 @@ function renderOrderDetail(){
     btns += `<button class="btn" style="width:100%;color:var(--amber);margin-top:6px" onclick="odUnapprove()">取消審核（退回待審核）</button>`;
   if(o.status==='已作廢' && o.reject_reason)
     btns += `<div style="background:#f0f0f4;border:1px solid #ccc;border-radius:8px;padding:10px 12px;font-size:12px;color:#555"><strong>作廢原因：</strong>${o.reject_reason}</div>`;
-  if(o.status!=='已作廢')
+  // 已完成需先取消審核才能廢單；已作廢不可再操作
+  if(!['已完成','已作廢'].includes(o.status))
     btns += `<button class="btn" style="width:100%;color:#888;border-color:#ccc;margin-top:6px" onclick="openVoid(null,true)">廢工單</button>`;
   document.getElementById('od-actions').innerHTML = btns || `<div style="color:var(--text3);font-size:13px;text-align:center;padding:8px">此狀態無可用操作</div>`;
+
+  // 套用 readOnly：儲存按鈕 + 所有表單欄位
+  const saveBtn = document.getElementById('od-save-btn');
+  saveBtn.disabled      = readOnly;
+  saveBtn.style.opacity = readOnly ? '0.4' : '1';
+  saveBtn.title         = readOnly
+    ? (o.status==='已完成' ? '已完成工單不可修改，請先取消審核' : '已作廢工單不可修改')
+    : '';
+  // input / textarea / select（排除操作區按鈕）
+  document.querySelectorAll(
+    '#od-source, #od-car-no, #od-engine-no, #od-car-type, #od-location, ' +
+    '#od-install-date, #od-arrival-date, #od-delivery-date, #od-note'
+  ).forEach(el => { el.disabled = readOnly; });
 }
 
 async function saveOrderDetail(){
   const o = _currentOrder;
+  if(['已完成','已作廢'].includes(o?.status)){
+    toast(o.status==='已完成' ? '已完成工單不可修改，請先取消審核' : '已作廢工單不可修改', false);
+    return;
+  }
   const items = [...document.querySelectorAll('#od-acc-grid input:checked')].map(i=>i.value);
   const body = {
     source:        document.getElementById('od-source').value.trim(),

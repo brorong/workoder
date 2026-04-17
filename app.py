@@ -651,8 +651,13 @@ def update_order(order_id):
     """更新工單基本資訊（不改狀態）"""
     data = request.get_json(force=True)
     db   = get_db()
-    if not db.execute("SELECT 1 FROM orders WHERE order_id=?", (order_id,)).fetchone():
+    row  = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
+    if not row:
         return jsonify({"error": "工單不存在"}), 404
+    if row["status"] == "已完成":
+        return jsonify({"error": "已完成工單不可修改，請先「取消審核」後再編輯"}), 403
+    if row["status"] == "已作廢":
+        return jsonify({"error": "已作廢工單不可修改"}), 403
     db.execute(
         """UPDATE orders SET
            source=?, car_no=?, car_type=?, engine_no=?, location=?,
@@ -767,12 +772,17 @@ def unapprove_order(order_id):
 @app.route("/api/orders/<order_id>/void", methods=["POST"])
 @require_token
 def void_order(order_id):
-    """廢工單：任何狀態 → 已作廢"""
+    """廢工單：非「已完成」、非「已作廢」的工單 → 已作廢"""
     data   = request.get_json(force=True) or {}
     reason = data.get("reason", "").strip() or "作廢"
-    db = get_db()
-    if not db.execute("SELECT 1 FROM orders WHERE order_id=?", (order_id,)).fetchone():
+    db  = get_db()
+    row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
+    if not row:
         return jsonify({"error": "工單不存在"}), 404
+    if row["status"] == "已完成":
+        return jsonify({"error": "已完成工單請先「取消審核」後再作廢"}), 403
+    if row["status"] == "已作廢":
+        return jsonify({"error": "此工單已作廢，無法重複操作"}), 400
     db.execute(
         "UPDATE orders SET status='已作廢', reject_reason=? WHERE order_id=?",
         (reason, order_id)
