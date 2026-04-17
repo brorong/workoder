@@ -1052,7 +1052,7 @@ async function loadPhotos(){
     <div style="margin-bottom:16px">
       <div style="font-size:12px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
       <div class="photo-grid">
-        ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${p.uploaded_at?.slice(11,16)||''}</div></div>`).join('')}
+        ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
       </div>
     </div>`).join('');
 }
@@ -1203,7 +1203,7 @@ async function loadOrderDetailPhotos(orderId){
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
         <div class="photo-grid">
-          ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${p.uploaded_at?.slice(11,16)||''}</div></div>`).join('')}
+          ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
         </div>
       </div>`).join('');
   }catch(e){ area.innerHTML='<p style="color:var(--red);font-size:13px">照片載入失敗</p>'; }
@@ -1516,6 +1516,18 @@ async function deleteAccount(id, username) {
 // ── Init ────────────────────────────────────────────────────
 document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
 initAuth();
+
+// ── 台灣時間格式化（伺服器存 UTC，顯示 +8）────────────────────
+function fmtTW(ts, mode){
+  if(!ts) return '';
+  // SQLite datetime 無時區，加 'Z' 告知 JS 為 UTC
+  const d = new Date(ts.replace(' ','T')+'Z');
+  if(isNaN(d)) return ts.slice(11,16);
+  if(mode==='time')
+    return d.toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false});
+  return d.toLocaleString('zh-TW',{timeZone:'Asia/Taipei',
+    month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+}
 
 // ── Lightbox ─────────────────────────────────────────────────
 function openLightbox(url){

@@ -75,7 +75,7 @@ def init_db():
             role      TEXT NOT NULL CHECK(role IN ('factory','installer')),
             email     TEXT DEFAULT '',
             phone     TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now','localtime'))
+            created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS orders (
             order_id      TEXT PRIMARY KEY,
@@ -92,35 +92,35 @@ def init_db():
             reject_reason TEXT DEFAULT '',
             arrived_at    TEXT DEFAULT '',
             completed_at  TEXT DEFAULT '',
-            created_at    TEXT DEFAULT (datetime('now','localtime'))
+            created_at    TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS photos (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             order_id   TEXT NOT NULL,
             filename   TEXT NOT NULL,
             photo_type TEXT NOT NULL,
-            uploaded_at TEXT DEFAULT (datetime('now','localtime')),
+            uploaded_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY(order_id) REFERENCES orders(order_id)
         );
         CREATE TABLE IF NOT EXISTS sessions (
             line_id TEXT NOT NULL,
             key     TEXT NOT NULL,
             value   TEXT NOT NULL,
-            updated_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now')),
             PRIMARY KEY(line_id, key)
         );
         CREATE TABLE IF NOT EXISTS settings (
             key        TEXT PRIMARY KEY,
             value      TEXT NOT NULL DEFAULT '',
             label      TEXT DEFAULT '',
-            updated_at TEXT DEFAULT (datetime('now','localtime'))
+            updated_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS accessories (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             name       TEXT NOT NULL UNIQUE,
             photos     TEXT NOT NULL DEFAULT '[]',
             sort_order INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now','localtime'))
+            created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS accounts (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +129,7 @@ def init_db():
             display_name  TEXT NOT NULL DEFAULT '',
             role          TEXT NOT NULL CHECK(role IN ('admin','factory','installer')),
             is_active     INTEGER DEFAULT 1,
-            created_at    TEXT DEFAULT (datetime('now','localtime'))
+            created_at    TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS login_sessions (
             token        TEXT PRIMARY KEY,
@@ -137,7 +137,7 @@ def init_db():
             username     TEXT NOT NULL,
             display_name TEXT NOT NULL,
             role         TEXT NOT NULL,
-            created_at   TEXT DEFAULT (datetime('now','localtime'))
+            created_at   TEXT DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_orders_installer ON orders(installer_id);
         CREATE INDEX IF NOT EXISTS idx_orders_status    ON orders(status);
@@ -943,7 +943,7 @@ def update_setting(key):
     value = request.get_json(force=True).get("value", "")
     db    = get_db()
     rows_affected = db.execute(
-        "UPDATE settings SET value=?, updated_at=datetime('now','localtime') WHERE key=?",
+        "UPDATE settings SET value=?, updated_at=datetime('now') WHERE key=?",
         (str(value).strip(), key)
     ).rowcount
     db.commit()
