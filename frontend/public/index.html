@@ -103,6 +103,7 @@ textarea { min-height:70px; resize:vertical; }
 /* Toast */
 #toast { position:fixed; bottom:28px; right:28px; background:var(--text); color:#fff; padding:12px 20px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:999; max-width:300px; }
 #toast.show { opacity:1; }
+#toast.show.err { background:#c0392b; }
 /* Photo grid */
 .photo-grid { display:flex; flex-wrap:wrap; gap:8px; }
 .photo-thumb-wrap { flex:0 0 auto; }
@@ -835,8 +836,10 @@ function headers(){ return {'Content-Type':'application/json','X-Admin-Token':AU
 
 function toast(msg, ok=true){
   const t=document.getElementById('toast');
-  t.textContent=msg; t.className='show';
-  setTimeout(()=>t.className='',2800);
+  t.textContent=msg;
+  t.className = ok ? 'show' : 'show err';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(()=>t.className='', ok ? 2800 : 4000);
 }
 
 function statusBadge(s){
@@ -1028,14 +1031,22 @@ async function doReject(){
 
 async function doApprove(oid){
   if(!confirm(`確定通過工單 ${oid}？`)) return;
-  const res=await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
-  if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); loadOrders(); }
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); loadOrders(); }
+    else toast(`審核失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
 
 async function doRecall(oid){
   if(!confirm(`確定收回工單 ${oid}？`)) return;
-  const res=await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
-  if(res.ok){ toast('已收回'); loadOrders(); }
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){ toast('已收回'); loadOrders(); }
+    else toast(`收回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
 
 async function loadPhotos(){
@@ -1224,9 +1235,15 @@ async function odRecall(){
   if(res.ok){ toast('已收回'); await openOrderDetail(_currentOrder.order_id); }
 }
 async function odApprove(){
-  if(!confirm(`確定通過工單 ${_currentOrder.order_id}？`)) return;
-  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/approve`,{method:'POST',headers:headers()});
-  if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${_currentOrder.order_id} 通過`); await openOrderDetail(_currentOrder.order_id); }
+  const oid = _currentOrder?.order_id;
+  if(!oid){ toast('找不到工單', false); return; }
+  if(!confirm(`確定通過工單 ${oid}？`)) return;
+  try{
+    const res = await fetch(`${API}/api/orders/${oid}/approve`,{method:'POST',headers:headers()});
+    const d = await res.json().catch(()=>({}));
+    if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); await openOrderDetail(oid); loadOrders(); }
+    else toast(`審核失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
 
 // 退回 modal 支援從維護頁呼叫
@@ -1240,12 +1257,15 @@ function openReject(oid, fromDetail=false){
 async function doReject(){
   const oid=document.getElementById('m-reject-order-id').value;
   const reason=document.getElementById('m-reason').value.trim()||'未說明';
-  const res=await fetch(`${API}/api/orders/${oid}/reject`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
-  if(res.ok){
-    toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`);
-    if(_rejectFromDetail) await openOrderDetail(oid);
-    else loadOrders();
-  }
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/reject`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){
+      toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`);
+      if(_rejectFromDetail) await openOrderDetail(oid);
+      loadOrders();
+    } else toast(`退回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
   closeModal('reject-modal');
 }
 
