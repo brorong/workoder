@@ -1223,10 +1223,13 @@ async function saveOrderDetail(){
   if(!body.car_no){ toast('車牌號碼不可空白',false); return; }
   const btn = document.getElementById('od-save-btn');
   btn.textContent='儲存中...'; btn.disabled=true;
-  const res = await fetch(`${API}/api/orders/${o.order_id}`,{method:'PUT',headers:headers(),body:JSON.stringify(body)});
-  btn.textContent='儲存變更'; btn.disabled=false;
-  if(res.ok){ toast('工單已更新'); Object.assign(_currentOrder, body); }
-  else{ const d=await res.json(); toast(d.error||'儲存失敗',false); }
+  try{
+    const res = await fetch(`${API}/api/orders/${o.order_id}`,{method:'PUT',headers:headers(),body:JSON.stringify(body)});
+    const d = await res.json().catch(()=>({}));
+    if(res.ok){ toast('工單已更新'); Object.assign(_currentOrder, body); }
+    else toast(d.error||'儲存失敗', false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
+  finally{ btn.textContent='儲存變更'; btn.disabled=false; }
 }
 
 async function loadOrderDetailPhotos(orderId){
@@ -1251,10 +1254,15 @@ async function loadOrderDetailPhotos(orderId){
 async function odAssign(){
   const inst = document.getElementById('od-installer-sel')?.value;
   if(!inst){ toast('請選擇技師',false); return; }
-  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
-  const d = await res.json();
-  if(res.ok){ toast('派工成功，已發送通知'); addNotifyLog(`📤 ${_currentOrder.order_id} 已指派給 ${inst}`); await openOrderDetail(_currentOrder.order_id); }
-  else toast(d.error,false);
+  const btn = document.querySelector('#od-actions .btn-p');
+  if(btn){ btn.textContent='指派中...'; btn.disabled=true; }
+  try{
+    const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/assign`,{method:'POST',headers:headers(),body:JSON.stringify({installer_name:inst})});
+    const d = await res.json().catch(()=>({}));
+    if(res.ok){ toast('派工成功，通知發送中'); addNotifyLog(`📤 ${_currentOrder.order_id} 已指派給 ${inst}`); await openOrderDetail(_currentOrder.order_id); loadOrders(); }
+    else toast(d.error||'指派失敗', false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
+  finally{ if(btn){ btn.textContent='指派並發送通知'; btn.disabled=false; } }
 }
 async function odRecall(){
   if(!confirm(`確定收回工單 ${_currentOrder.order_id}？`)) return;

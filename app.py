@@ -8,6 +8,7 @@ import json
 import secrets
 import sqlite3
 import logging
+import threading
 from functools import wraps
 from datetime import datetime
 
@@ -484,52 +485,65 @@ def notify_email(to_email: str, subject: str, body: str):
         return False
 
 def send_order_notification(order_id: str, event: str, extra: str = ""):
-    """統一發送工單事件通知"""
-    db = get_db()
-    row = db.execute(
-        "SELECT o.*, u.name as installer_name, u.email as installer_email "
-        "FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id "
-        "WHERE o.order_id=?", (order_id,)
-    ).fetchone()
-    if not row:
-        return
+    """統一發送工單事件通知（在獨立 DB 連接中執行，適合背景執行緒）"""
+    try:
+        # 背景執行緒不可使用 Flask g，直接建立新連接
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT o.*, u.name as installer_name, u.email as installer_email "
+            "FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id "
+            "WHERE o.order_id=?", (order_id,)
+        ).fetchone()
+        if not row:
+            return
 
-    installer_url = f"{BASE_URL}/installer/{order_id}"
-    events = {
-        "assigned":   (f"\n📦 新工單指派\n工單：{order_id}\n車牌：{row['car_no']}\n配件：{row['items']}\n地點：{row['location']}\n➜ {installer_url}", "【新工單】"),
-        "submitted":  (f"\n🔍 工單待審核\n工單：{order_id}\n車牌：{row['car_no']}\n技師：{row['installer_name']}", "【待審核】"),
-        "approved":   (f"\n✅ 工單已通過\n工單：{order_id}\n車牌：{row['car_no']}", "【完工通過】"),
-        "rejected":   (f"\n❌ 工單退回\n工單：{order_id}\n原因：{extra}", "【工單退回】"),
-        "recalled":   (f"\n🔄 工單已收回\n工單：{order_id}", "【工單收回】"),
-    }
-    line_msg, email_subj = events.get(event, ("", ""))
-    if not line_msg:
-        return
+        installer_url = f"{BASE_URL}/installer/{order_id}"
+        events = {
+            "assigned":   (f"\n📦 新工單指派\n工單：{order_id}\n車牌：{row['car_no']}\n配件：{row['items']}\n地點：{row['location']}\n➜ {installer_url}", "【新工單】"),
+            "submitted":  (f"\n🔍 工單待審核\n工單：{order_id}\n車牌：{row['car_no']}\n技師：{row['installer_name']}", "【待審核】"),
+            "approved":   (f"\n✅ 工單已通過\n工單：{order_id}\n車牌：{row['car_no']}", "【完工通過】"),
+            "rejected":   (f"\n❌ 工單退回\n工單：{order_id}\n原因：{extra}", "【工單退回】"),
+            "recalled":   (f"\n🔄 工單已收回\n工單：{order_id}", "【工單收回】"),
+        }
+        line_msg, email_subj = events.get(event, ("", ""))
+        if not line_msg:
+            return
 
-    # LINE Messaging API
-    if event == "assigned":
-        # 直接推送到被指派的技師 LINE userId（users.line_id 欄位）
-        installer_line_id = row["installer_id"]
-        if installer_line_id:
-            notify_line(line_msg, to=installer_line_id)
-        # 同步通知後台預設群組（若有）
-        if LINE_TARGET_ID and LINE_TARGET_ID != installer_line_id:
+        # LINE Messaging API
+        if event == "assigned":
+            installer_line_id = row["installer_id"]
+            if installer_line_id:
+                notify_line(line_msg, to=installer_line_id)
+            if LINE_TARGET_ID and LINE_TARGET_ID != installer_line_id:
+                notify_line(line_msg)
+        else:
             notify_line(line_msg)
-    else:
-        # 其它事件推送到後台預設目標（廠務群組/個人）
-        notify_line(line_msg)
 
-    # Email：指派時通知技師，提交/審核結果通知廠務
-    if event == "assigned" and row["installer_email"]:
-        notify_email(
-            row["installer_email"], f"{email_subj} {order_id}",
-            f"<h2>新工單：{order_id}</h2><p>車牌：{row['car_no']}<br>配件：{row['items']}<br>地點：{row['location']}</p>"
-            f"<p><a href='{installer_url}' style='padding:12px 24px;background:#185FA5;color:#fff;text-decoration:none;border-radius:8px'>前往施工頁面</a></p>"
-        )
-    elif event in ("submitted", "approved", "rejected"):
-        factory_users = db.execute("SELECT email FROM users WHERE role='factory' AND email!=''").fetchall()
-        for fu in factory_users:
-            notify_email(fu["email"], f"{email_subj} {order_id}", f"<h2>{email_subj}</h2><p>工單：{order_id}</p><p>{extra}</p>")
+        # Email 通知
+        if event == "assigned" and row["installer_email"]:
+            notify_email(
+                row["installer_email"], f"{email_subj} {order_id}",
+                f"<h2>新工單：{order_id}</h2><p>車牌：{row['car_no']}<br>配件：{row['items']}<br>地點：{row['location']}</p>"
+                f"<p><a href='{installer_url}' style='padding:12px 24px;background:#185FA5;color:#fff;text-decoration:none;border-radius:8px'>前往施工頁面</a></p>"
+            )
+        elif event in ("submitted", "approved", "rejected"):
+            factory_users = conn.execute("SELECT email FROM users WHERE role='factory' AND email!=''").fetchall()
+            for fu in factory_users:
+                notify_email(fu["email"], f"{email_subj} {order_id}", f"<h2>{email_subj}</h2><p>工單：{order_id}</p><p>{extra}</p>")
+    except Exception as e:
+        logger.error(f"send_order_notification 失敗 [{event}] {order_id}: {e}")
+    finally:
+        try: conn.close()
+        except: pass
+
+def notify_bg(order_id: str, event: str, extra: str = ""):
+    """背景執行緒發送通知，立即返回不阻塞 HTTP 回應"""
+    threading.Thread(
+        target=send_order_notification,
+        args=(order_id, event, extra),
+        daemon=True
+    ).start()
 
 # ── 照片水印 ───────────────────────────────────────────────
 def add_watermark(img_path: str, order_id: str, car_no: str):
@@ -673,7 +687,7 @@ def assign_order(order_id):
         (inst["line_id"], order_id)
     )
     db.commit()
-    send_order_notification(order_id, "assigned")
+    notify_bg(order_id, "assigned")
     return jsonify({"ok": True, "status": "待確認"})
 
 
@@ -701,7 +715,7 @@ def submit_order(order_id):
         (ts, order_id)
     )
     db.commit()
-    send_order_notification(order_id, "submitted")
+    notify_bg(order_id, "submitted")
     return jsonify({"ok": True})
 
 
@@ -713,7 +727,7 @@ def approve_order(order_id):
         "UPDATE orders SET status='已完成',reject_reason='' WHERE order_id=?", (order_id,)
     )
     db.commit()
-    send_order_notification(order_id, "approved")
+    notify_bg(order_id, "approved")
     return jsonify({"ok": True})
 
 
@@ -727,7 +741,7 @@ def reject_order(order_id):
         (reason, order_id)
     )
     db.commit()
-    send_order_notification(order_id, "rejected", reason)
+    notify_bg(order_id, "rejected", reason)
     return jsonify({"ok": True})
 
 
@@ -776,7 +790,7 @@ def recall_order(order_id):
         (order_id,)
     )
     db.commit()
-    send_order_notification(order_id, "recalled")
+    notify_bg(order_id, "recalled")
     return jsonify({"ok": True})
 
 
