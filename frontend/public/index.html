@@ -1077,16 +1077,30 @@ async function loadPhotos(){
   const photos=await res.json();
   const area=document.getElementById('gallery-area');
   if(!photos.length){ area.innerHTML='<p style="color:var(--text3);font-size:13px;padding:12px 0">此工單尚無照片</p>'; return; }
-  // group by type
-  const byType={};
-  photos.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
-  area.innerHTML = Object.entries(byType).map(([type,ps])=>`
-    <div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
-      <div class="photo-grid">
-        ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
-      </div>
-    </div>`).join('');
+  const sigs   = photos.filter(p=>p.photo_type==='signature');
+  const others = photos.filter(p=>p.photo_type!=='signature');
+  let html = '';
+  if(others.length){
+    const byType={};
+    others.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
+    html += Object.entries(byType).map(([type,ps])=>`
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
+        <div class="photo-grid">
+          ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+  if(sigs.length){
+    const sig = sigs[sigs.length-1];
+    html += `<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e0e4ec">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:8px">技師簽名</div>
+      <img src="${sig.url}" style="max-width:280px;width:100%;border:1px solid #e0e4ec;border-radius:8px;cursor:zoom-in;background:#fafafa"
+           onclick="openLightbox('${sig.url}')" onerror="this.style.opacity='.3'">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${fmtTW(sig.uploaded_at)}</div>
+    </div>`;
+  }
+  area.innerHTML = html;
 }
 
 function viewPhotos(oid){
@@ -1238,15 +1252,38 @@ async function loadOrderDetailPhotos(orderId){
     const res = await fetch(`${API}/api/orders/${orderId}/photos`);
     const photos = await res.json();
     if(!photos.length){ area.innerHTML='<p style="color:var(--text3);font-size:13px">尚無照片</p>'; return; }
-    const byType={};
-    photos.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
-    area.innerHTML = Object.entries(byType).map(([type,ps])=>`
-      <div style="margin-bottom:14px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
-        <div class="photo-grid">
-          ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
-        </div>
-      </div>`).join('');
+
+    // 簽名單獨處理
+    const sigs   = photos.filter(p=>p.photo_type==='signature');
+    const others = photos.filter(p=>p.photo_type!=='signature');
+
+    let html = '';
+
+    // 施工照片（分類顯示）
+    if(others.length){
+      const byType={};
+      others.forEach(p=>{ if(!byType[p.photo_type]) byType[p.photo_type]=[]; byType[p.photo_type].push(p); });
+      html += Object.entries(byType).map(([type,ps])=>`
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${type}</div>
+          <div class="photo-grid">
+            ${ps.map(p=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" loading="lazy" onerror="this.style.opacity='.3'" onclick="openLightbox('${p.url}')"><div class="photo-label">${fmtTW(p.uploaded_at,'time')}</div></div>`).join('')}
+          </div>
+        </div>`).join('');
+    }
+
+    // 技師簽名
+    if(sigs.length){
+      const sig = sigs[sigs.length-1]; // 取最後一張
+      html += `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;letter-spacing:.06em">技師簽名</div>
+        <img src="${sig.url}" style="max-width:240px;width:100%;border:1px solid var(--border);border-radius:8px;cursor:zoom-in;background:#fafafa"
+             onclick="openLightbox('${sig.url}')" onerror="this.style.opacity='.3'">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">${fmtTW(sig.uploaded_at)}</div>
+      </div>`;
+    }
+
+    area.innerHTML = html;
   }catch(e){ area.innerHTML='<p style="color:var(--red);font-size:13px">照片載入失敗</p>'; }
 }
 

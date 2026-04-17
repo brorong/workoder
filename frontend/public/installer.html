@@ -535,11 +535,32 @@ async function uploadAllPhotos(){
   return done;
 }
 
+async function uploadSignature(){
+  if(!sigCanvas || !sigCtx) return;
+  // 檢查是否有簽名（畫布非空白）
+  const px = sigCtx.getImageData(0, 0, sigCanvas.width, sigCanvas.height).data;
+  const hasInk = px.some((v, i) => i % 4 === 3 && v > 0); // 任一像素不透明
+  if(!hasInk) return;
+  return new Promise(resolve => {
+    sigCanvas.toBlob(async blob => {
+      if(!blob){ resolve(); return; }
+      const fd = new FormData();
+      fd.append('file', blob, `sig_${ORDER_ID}.png`);
+      fd.append('photo_type', 'signature');
+      try{ await fetch(`${API}/api/orders/${ORDER_ID}/photos`, {method:'POST', body:fd}); }
+      catch(e){ console.warn('簽名上傳失敗', e); }
+      resolve();
+    }, 'image/png');
+  });
+}
+
 async function doSubmit(){
   if(isLocked()){ alert('此工單已完成，無法再送出'); return; }
   const btn=document.getElementById('submit-btn');
   btn.disabled=true; btn.textContent='上傳中...';
   const n=await uploadAllPhotos();
+  btn.textContent='上傳簽名...';
+  await uploadSignature();
   btn.textContent='提交完工確認...';
   try{
     const res=await fetch(`${API}/api/orders/${ORDER_ID}/submit`,{method:'POST'});
