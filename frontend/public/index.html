@@ -62,6 +62,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .b-rev   { background:#fff3cd; color:#7a5800; }
 .b-done  { background:var(--green-bg); color:var(--green); }
 .b-rej   { background:var(--red-bg);   color:var(--red); }
+.b-void  { background:#e8e8ee; color:#666; }
 /* Form */
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .form-grid.g3 { grid-template-columns:1fr 1fr 1fr; }
@@ -612,6 +613,22 @@ textarea { min-height:70px; resize:vertical; }
   </div>
 </div>
 
+<!-- Void Modal -->
+<div class="overlay" id="void-modal">
+  <div class="modal">
+    <div class="modal-hd"><span>廢工單</span><button class="btn btn-sm" onclick="closeModal('void-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="background:var(--amber-bg);border:1px solid #f0d690;border-radius:8px;padding:10px 12px;font-size:13px;color:var(--amber);margin-bottom:12px">⚠ 廢工單後無法恢復，請確認。</div>
+      <div class="fg"><label>作廢原因</label><textarea id="m-void-reason" placeholder="說明作廢原因...（可不填）"></textarea></div>
+      <input type="hidden" id="m-void-order-id">
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('void-modal')">取消</button>
+      <button class="btn" style="background:#555;color:#fff;border-color:#555" onclick="doVoid()">確認廢工單</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add User Modal -->
 <div class="overlay" id="user-modal">
   <div class="modal">
@@ -843,7 +860,7 @@ function toast(msg, ok=true){
 }
 
 function statusBadge(s){
-  const map={待派工:'b-wait',待確認:'b-pend',施工中:'b-work',待審核:'b-rev',已完成:'b-done',退回:'b-rej'};
+  const map={待派工:'b-wait',待確認:'b-pend',施工中:'b-work',待審核:'b-rev',已完成:'b-done',退回:'b-rej',已作廢:'b-void'};
   return `<span class="badge ${map[s]||''}">${s}</span>`;
 }
 
@@ -855,6 +872,10 @@ function rowActions(o){
     btns+=`<button class="btn btn-sm btn-p" onclick="doApprove('${o.order_id}')">通過</button>`;
     btns+=`<button class="btn btn-sm" style="color:var(--red)" onclick="openReject('${o.order_id}')">退回</button>`;
   }
+  if(o.status==='已完成')
+    btns+=`<button class="btn btn-sm" style="color:var(--amber)" onclick="doUnapprove('${o.order_id}')">取消審核</button>`;
+  if(o.status!=='已作廢')
+    btns+=`<button class="btn btn-sm" style="color:#888" onclick="openVoid('${o.order_id}')">廢單</button>`;
   btns+=`<button class="btn btn-sm" onclick="viewPhotos('${o.order_id}')">照片</button>`;
   return `<div class="btn-row">${btns}</div>`;
 }
@@ -1175,6 +1196,12 @@ function renderOrderDetail(){
   }
   if(o.status==='退回' && o.reject_reason)
     btns += `<div style="background:var(--red-bg);border:1px solid #f5c0c0;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red)"><strong>退回原因：</strong>${o.reject_reason}</div>`;
+  if(o.status==='已完成')
+    btns += `<button class="btn" style="width:100%;color:var(--amber);margin-top:6px" onclick="odUnapprove()">取消審核（退回待審核）</button>`;
+  if(o.status==='已作廢' && o.reject_reason)
+    btns += `<div style="background:#f0f0f4;border:1px solid #ccc;border-radius:8px;padding:10px 12px;font-size:12px;color:#555"><strong>作廢原因：</strong>${o.reject_reason}</div>`;
+  if(o.status!=='已作廢')
+    btns += `<button class="btn" style="width:100%;color:#888;border-color:#ccc;margin-top:6px" onclick="openVoid(null,true)">廢工單</button>`;
   document.getElementById('od-actions').innerHTML = btns || `<div style="color:var(--text3);font-size:13px;text-align:center;padding:8px">此狀態無可用操作</div>`;
 }
 
@@ -1244,6 +1271,51 @@ async function odApprove(){
     if(res.ok){ toast('已通過完工'); addNotifyLog(`✅ ${oid} 通過`); await openOrderDetail(oid); loadOrders(); }
     else toast(`審核失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
+}
+
+// ── 取消審核 ─────────────────────────────────────────────────
+async function doUnapprove(oid){
+  if(!confirm(`確定取消工單 ${oid} 的審核，退回「待審核」？`)) return;
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/unapprove`,{method:'POST',headers:headers()});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){ toast('已取消審核，退回待審核'); loadOrders(); }
+    else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
+}
+async function odUnapprove(){
+  const oid=_currentOrder?.order_id;
+  if(!oid) return;
+  if(!confirm(`確定取消工單 ${oid} 的審核？`)) return;
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/unapprove`,{method:'POST',headers:headers()});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){ toast('已取消審核'); await openOrderDetail(oid); loadOrders(); }
+    else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
+}
+
+// ── 廢工單 ──────────────────────────────────────────────────
+let _voidFromDetail = false;
+function openVoid(oid, fromDetail=false){
+  _voidFromDetail = fromDetail;
+  document.getElementById('m-void-order-id').value = oid || _currentOrder?.order_id || '';
+  document.getElementById('m-void-reason').value = '';
+  document.getElementById('void-modal').classList.add('open');
+}
+async function doVoid(){
+  const oid    = document.getElementById('m-void-order-id').value;
+  const reason = document.getElementById('m-void-reason').value.trim();
+  try{
+    const res=await fetch(`${API}/api/orders/${oid}/void`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
+    const d=await res.json().catch(()=>({}));
+    if(res.ok){
+      toast('工單已作廢');
+      if(_voidFromDetail) await openOrderDetail(oid);
+      loadOrders();
+    } else toast(`失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
+  closeModal('void-modal');
 }
 
 // 退回 modal 支援從維護頁呼叫

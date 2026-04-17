@@ -260,6 +260,20 @@ async function loadOrder(){
 function renderOrder(){
   document.getElementById('loading-0').style.display='none';
   document.getElementById('order-info').style.display='block';
+
+  // 已完成 / 已作廢 → 唯讀模式，隱藏所有操作按鈕
+  const locked = ['已完成','已作廢'].includes(order.status);
+  if(locked){
+    document.getElementById('next-btn').style.display='none';
+    document.getElementById('arrive-btn').style.display='none';
+    // 在頁首顯示狀態提示
+    const statusColors={'已完成':'#2d7a4f','已作廢':'#888'};
+    const tip=document.createElement('div');
+    tip.style.cssText=`background:${statusColors[order.status]||'#888'};color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600`;
+    tip.textContent = order.status==='已完成' ? '✅ 此工單已完成審核，僅供查詢' : '🚫 此工單已作廢';
+    document.querySelector('.hdr').after(tip);
+  }
+
   document.getElementById('hdr-order-id').textContent = order.order_id;
   document.getElementById('hdr-plate').textContent = `${order.car_no}  ${order.car_type||''}`;
   document.getElementById('d-oid').textContent = order.order_id;
@@ -338,7 +352,10 @@ function rebuildPhotoSection(sectionId){
   }
 }
 
+function isLocked(){ return ['已完成','已作廢'].includes(order?.status); }
+
 function captureRequiredPhoto(key){
+  if(isLocked()) return;
   openCamera(label(key), file => {
     if(!file) return;
     photoUploads[key] = file;
@@ -388,7 +405,7 @@ function renderExtraSection(type){
 }
 
 function captureExtraPhoto(type){
-  if(extraPhotos[type].length >= MAX_EXTRA) return;
+  if(isLocked() || extraPhotos[type].length >= MAX_EXTRA) return;
   openCamera(type==='before'?'施工前其它照片':'完工其它照片', file => {
     if(!file) return;
     extraPhotos[type].push({ file, url: URL.createObjectURL(file) });
@@ -519,6 +536,7 @@ async function uploadAllPhotos(){
 }
 
 async function doSubmit(){
+  if(isLocked()){ alert('此工單已完成，無法再送出'); return; }
   const btn=document.getElementById('submit-btn');
   btn.disabled=true; btn.textContent='上傳中...';
   const n=await uploadAllPhotos();

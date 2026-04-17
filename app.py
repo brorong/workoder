@@ -731,6 +731,42 @@ def reject_order(order_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/orders/<order_id>/unapprove", methods=["POST"])
+@require_token
+def unapprove_order(order_id):
+    """取消審核：已完成 → 待審核"""
+    db = get_db()
+    row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "工單不存在"}), 404
+    if row["status"] != "已完成":
+        return jsonify({"error": f"目前狀態「{row['status']}」無法取消審核"}), 400
+    db.execute(
+        "UPDATE orders SET status='待審核', reject_reason='' WHERE order_id=?", (order_id,)
+    )
+    db.commit()
+    logger.info(f"取消審核: {order_id}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/orders/<order_id>/void", methods=["POST"])
+@require_token
+def void_order(order_id):
+    """廢工單：任何狀態 → 已作廢"""
+    data   = request.get_json(force=True) or {}
+    reason = data.get("reason", "").strip() or "作廢"
+    db = get_db()
+    if not db.execute("SELECT 1 FROM orders WHERE order_id=?", (order_id,)).fetchone():
+        return jsonify({"error": "工單不存在"}), 404
+    db.execute(
+        "UPDATE orders SET status='已作廢', reject_reason=? WHERE order_id=?",
+        (reason, order_id)
+    )
+    db.commit()
+    logger.info(f"廢工單: {order_id}，原因：{reason}")
+    return jsonify({"ok": True})
+
+
 @app.route("/api/orders/<order_id>/recall", methods=["POST"])
 @require_token
 def recall_order(order_id):
