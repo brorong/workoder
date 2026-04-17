@@ -171,7 +171,7 @@ textarea { min-height:70px; resize:vertical; }
       <span id="sidebar-role" class="badge" style="font-size:10px;padding:2px 7px"></span>
     </div>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-sm" style="flex:1;padding:3px 0;font-size:11px" onclick="openChangePassword()">改密碼</button>
+      <button id="btn-chpw" class="btn btn-sm" style="flex:1;padding:3px 0;font-size:11px" onclick="openChangePassword()">改密碼</button>
       <button class="btn btn-sm" style="flex:1;padding:3px 0;font-size:11px;color:var(--red)" onclick="doLogout()">登出</button>
     </div>
   </div>
@@ -781,9 +781,12 @@ function updateSidebarUser() {
   const [label, cls] = roleMap[currentUser.role] || [currentUser.role, ''];
   roleEl.textContent = label;
   roleEl.className = 'badge ' + cls;
-  // 帳號管理只對 admin 顯示
+  // 帳號管理 + 改密碼按鈕只對 admin 顯示
+  const isAdmin = currentUser.role === 'admin';
   const navAcc = document.getElementById('nav-accounts');
-  if (navAcc) navAcc.style.display = currentUser.role === 'admin' ? '' : 'none';
+  if (navAcc) navAcc.style.display = isAdmin ? '' : 'none';
+  const chpwBtn = document.getElementById('btn-chpw');
+  if (chpwBtn) chpwBtn.style.display = isAdmin ? '' : 'none';
 }
 
 // 初始化：驗證既有 token

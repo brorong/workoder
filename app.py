@@ -291,7 +291,7 @@ def auth_me():
 
 
 @app.route("/api/auth/change-password", methods=["POST"])
-@require_token
+@require_admin
 def change_password():
     data = request.get_json(force=True)
     old_pw = data.get("old_password", "")
