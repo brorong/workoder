@@ -89,7 +89,7 @@ input[type=file]{display:none}
 .extra-add-card{border:1.5px dashed var(--border2);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;padding:14px 8px;text-align:center;font-family:var(--sans);aspect-ratio:4/3}
 .extra-add-card:active{background:var(--blue-bg);border-color:var(--blue)}
 .extra-add-card svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5}
-/* Camera modal */
+/* Camera modal (getUserMedia overlay) */
 .cam-modal{display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;align-items:center}
 .cam-modal.open{display:flex}
 #cam-video{width:100%;flex:1;object-fit:cover}
@@ -98,6 +98,16 @@ input[type=file]{display:none}
 .cam-shutter{width:72px;height:72px;background:#fff;border:5px solid rgba(255,255,255,.75);border-radius:50%;cursor:pointer;box-shadow:0 0 0 3px rgba(255,255,255,.3)}
 .cam-shutter:active{transform:scale(.94)}
 .cam-hint{position:absolute;top:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.8);font-size:13px;pointer-events:none}
+/* Photo source bottom sheet */
+.src-sheet{display:none;position:fixed;inset:0;z-index:9998;align-items:flex-end}
+.src-sheet.open{display:flex}
+.src-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.src-body{position:relative;background:#fff;border-radius:20px 20px 0 0;width:100%;padding:16px 16px 40px}
+.src-title{text-align:center;font-size:13px;font-weight:600;color:var(--text2);padding:4px 0 14px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.src-btn{width:100%;padding:15px;font-size:16px;font-family:var(--sans);border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;font-weight:500}
+.src-btn-cam{background:var(--blue);color:#fff}
+.src-btn-gallery{background:var(--bg);color:var(--text);border:1px solid var(--border2)}
+.src-btn-cancel{background:transparent;color:var(--text3);font-size:14px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -191,7 +201,7 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- Camera modal (getUserMedia — works inside LINE browser) -->
+<!-- Camera modal (getUserMedia overlay) -->
 <div class="cam-modal" id="cam-modal">
   <div class="cam-hint" id="cam-hint"></div>
   <video id="cam-video" playsinline autoplay muted></video>
@@ -202,10 +212,26 @@ input[type=file]{display:none}
   </div>
 </div>
 <canvas id="cam-canvas" style="display:none"></canvas>
-<!-- Fallback file inputs (no capture attr — used only when getUserMedia is unavailable) -->
-<input type="file" id="fb-photo"  accept="image/*" style="display:none" onchange="_fbPhotoChange(this)">
-<input type="file" id="fb-extra"  accept="image/*" style="display:none" onchange="_fbExtraChange(this)">
-<input type="file" id="fb-retake" accept="image/*" style="display:none" onchange="_fbRetakeChange(this)">
+
+<!-- Photo source bottom sheet -->
+<div class="src-sheet" id="src-sheet">
+  <div class="src-backdrop" onclick="closeSrcSheet()"></div>
+  <div class="src-body">
+    <div class="src-title" id="src-title">選擇照片來源</div>
+    <button class="src-btn src-btn-cam" onclick="_srcCamera()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      直接拍照
+    </button>
+    <button class="src-btn src-btn-gallery" onclick="_srcGallery()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      從相簿選擇
+    </button>
+    <button class="src-btn src-btn-cancel" onclick="closeSrcSheet()">取消</button>
+  </div>
+</div>
+<!-- File inputs: with capture (camera) and without (gallery) -->
+<input type="file" id="fi-cam"     accept="image/*" capture="environment" style="display:none" onchange="_fiCamChange(this)">
+<input type="file" id="fi-gallery" accept="image/*"                       style="display:none" onchange="_fiGalleryChange(this)">
 
 <!-- Bottom bar: next step -->
 <div class="bottom-bar">
@@ -407,39 +433,77 @@ function retakeExtraPhoto(type, index){
   });
 }
 
-// ── Fallback file-input handlers (when getUserMedia unavailable) ──
-let _fbCallback = null;
-let _fbExtraCb  = null;
-let _fbRetakeCb = null;
-function _fbPhotoChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbCallback){_fbCallback(f);_fbCallback=null;} }
-function _fbExtraChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbExtraCb){_fbExtraCb(f);_fbExtraCb=null;} }
-function _fbRetakeChange(input){ const f=input.files[0]; input.value=''; if(f&&_fbRetakeCb){_fbRetakeCb(f);_fbRetakeCb=null;} }
+// ── Photo source sheet ───────────────────────────────────────────
+let _srcCallback = null;
 
-// ── Camera engine (getUserMedia) ─────────────────────────────────
+function openCamera(hint, callback){
+  // "openCamera" now shows a bottom sheet to choose camera vs gallery
+  _srcCallback = callback;
+  document.getElementById('src-title').textContent = hint || '選擇照片來源';
+  document.getElementById('src-sheet').classList.add('open');
+}
+
+function closeSrcSheet(){
+  document.getElementById('src-sheet').classList.remove('open');
+  _srcCallback = null;
+}
+
+// User chose "直接拍照"
+async function _srcCamera(){
+  closeSrcSheet();
+  // 1. Try getUserMedia (works in Chrome/Safari/Android LINE with camera permission)
+  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    try{
+      await _openGumCamera(_srcCallback);
+      _srcCallback = null;
+      return;
+    }catch(e){
+      console.warn('getUserMedia failed:', e.name, e.message);
+    }
+  }
+  // 2. Fallback: <input capture="environment"> (works on iOS LINE, some Android)
+  _fiCamPending = _srcCallback;
+  _srcCallback  = null;
+  document.getElementById('fi-cam').value = '';
+  document.getElementById('fi-cam').click();
+}
+
+// User chose "從相簿選擇"
+function _srcGallery(){
+  const cb = _srcCallback;
+  closeSrcSheet();
+  _fiGalleryPending = cb;
+  document.getElementById('fi-gallery').value = '';
+  document.getElementById('fi-gallery').click();
+}
+
+// File input handlers
+let _fiCamPending     = null;
+let _fiGalleryPending = null;
+function _fiCamChange(input){
+  const f = input.files[0]; input.value = '';
+  if(f && _fiCamPending){ _fiCamPending(f); _fiCamPending = null; }
+}
+function _fiGalleryChange(input){
+  const f = input.files[0]; input.value = '';
+  if(f && _fiGalleryPending){ _fiGalleryPending(f); _fiGalleryPending = null; }
+}
+
+// ── getUserMedia camera overlay ──────────────────────────────────
 let _camStream   = null;
 let _camFacing   = 'environment';
 let _camCallback = null;
 
-async function openCamera(hint, callback){
+async function _openGumCamera(callback){
+  if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
+  _camStream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:_camFacing, width:{ideal:1920}, height:{ideal:1080} }, audio:false
+  });
   _camCallback = callback;
-  document.getElementById('cam-hint').textContent = hint || '';
-  // Try getUserMedia first (LINE browser, Chrome, Safari iOS 15+)
-  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-    try{
-      if(_camStream){ _camStream.getTracks().forEach(t=>t.stop()); _camStream=null; }
-      _camStream = await navigator.mediaDevices.getUserMedia({
-        video:{ facingMode:_camFacing, width:{ideal:1920}, height:{ideal:1080} }, audio:false
-      });
-      const v = document.getElementById('cam-video');
-      v.srcObject = _camStream;
-      await v.play();
-      document.getElementById('cam-modal').classList.add('open');
-      return;
-    }catch(e){ console.warn('getUserMedia failed, fallback to file input:', e); }
-  }
-  // Fallback: file input without capture (user can pick from gallery or camera)
-  _fbCallback = callback;
-  document.getElementById('fb-photo').click();
+  const v = document.getElementById('cam-video');
+  v.srcObject = _camStream;
+  await v.play();
+  document.getElementById('cam-modal').classList.add('open');
 }
 
 function camCapture(){
@@ -460,9 +524,7 @@ async function switchCamera(){
   if(!_camStream) return;
   _camStream.getTracks().forEach(t=>t.stop());
   try{
-    _camStream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:_camFacing }, audio:false
-    });
+    _camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:_camFacing }, audio:false });
     document.getElementById('cam-video').srcObject = _camStream;
   }catch(e){ console.warn('switchCamera failed:', e); }
 }
