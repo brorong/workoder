@@ -146,7 +146,12 @@ def init_db():
         """
         )
         # 向下相容：舊資料庫補欄位
-        for col, default in [("arrival_date", "''"), ("delivery_date", "''")]:
+        for col, default in [
+            ("arrival_date",  "''"),
+            ("delivery_date", "''"),
+            ("approved_by",   "''"),   # 審核通過者姓名
+            ("approved_at",   "''"),   # 審核通過時間（UTC）
+        ]:
             try:
                 conn.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT DEFAULT {default}")
             except Exception:
@@ -595,6 +600,7 @@ def list_orders():
                      o.location,o.install_date,o.arrival_date,o.delivery_date,
                      o.items,o.note,o.status,
                      o.reject_reason,o.arrived_at,o.completed_at,o.created_at,
+                     o.approved_by,o.approved_at,
                      u.name as installer_name
               FROM orders o
               LEFT JOIN users u ON o.installer_id=u.line_id
@@ -640,6 +646,7 @@ def get_order(order_id):
         "LEFT JOIN users u ON o.installer_id=u.line_id WHERE o.order_id=?",
         (order_id,)
     ).fetchone()
+    # approved_by/approved_at 已由 ALTER TABLE 補欄位，SELECT * 自動包含
     if not row:
         return jsonify({"error": "工單不存在"}), 404
     return jsonify(dict(row))
@@ -729,8 +736,11 @@ def submit_order(order_id):
 @require_token
 def approve_order(order_id):
     db = get_db()
+    approver = g.current_user.get("display_name") or g.current_user.get("username", "")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.execute(
-        "UPDATE orders SET status='已完成',reject_reason='' WHERE order_id=?", (order_id,)
+        "UPDATE orders SET status='已完成', reject_reason='', approved_by=?, approved_at=? WHERE order_id=?",
+        (approver, ts, order_id)
     )
     db.commit()
     notify_bg(order_id, "approved")
@@ -762,7 +772,8 @@ def unapprove_order(order_id):
     if row["status"] != "已完成":
         return jsonify({"error": f"目前狀態「{row['status']}」無法取消審核"}), 400
     db.execute(
-        "UPDATE orders SET status='待審核', reject_reason='' WHERE order_id=?", (order_id,)
+        "UPDATE orders SET status='待審核', reject_reason='', approved_by='', approved_at='' WHERE order_id=?",
+        (order_id,)
     )
     db.commit()
     logger.info(f"取消審核: {order_id}")
@@ -977,13 +988,14 @@ def export_excel():
             "SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,o.location,"
             "o.install_date,o.arrival_date,o.delivery_date,o.items,o.status,"
             "u.name as installer_name,o.reject_reason,"
-            "o.arrived_at,o.completed_at,o.created_at "
+            "o.arrived_at,o.completed_at,o.approved_by,o.approved_at,o.created_at "
             "FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id "
             "ORDER BY o.created_at DESC",
             db
         )
         df.columns = ["工單號","來源","車牌","車型","引擎號","地點","安裝日期","到車日","交車日",
-                      "配件","狀態","技師姓名","退回/作廢原因","到場時間","完工時間","建立時間"]
+                      "配件","狀態","技師姓名","退回/作廢原因",
+                      "到場時間","完工時間","審核人員","審核時間","建立時間"]
         path = "/tmp/orders_export.xlsx"
         df.to_excel(path, index=False)
         return send_file(path, as_attachment=True, download_name="工單匯出.xlsx")

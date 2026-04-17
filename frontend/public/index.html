@@ -925,14 +925,17 @@ async function loadOrders(){
     const countEl = document.getElementById('orders-count');
     if(countEl) countEl.textContent = `共 ${orders.length} 筆`;
     document.querySelector('#orders-table tbody').innerHTML = `
-      <tr><th>工單號</th><th>車牌</th><th>車型</th><th>配件</th><th>技師</th><th>狀態</th><th>到車日</th><th>交車日</th><th>建立日期</th><th>操作</th></tr>`+
+      <tr><th>工單號</th><th>車牌</th><th>車型</th><th>配件</th><th>技師</th><th>狀態</th><th>審核人員</th><th>到車日</th><th>交車日</th><th>建立日期</th><th>操作</th></tr>`+
       orders.map(o=>`<tr>
         <td><code style="font-family:var(--mono);font-size:12px;color:var(--blue);cursor:pointer;text-decoration:underline" onclick="openOrderDetail('${o.order_id}')">${o.order_id}</code></td>
         <td><strong>${o.car_no}</strong></td>
         <td>${o.car_type||'—'}</td>
-        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.items||'—'}</td>
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.items||'—'}</td>
         <td>${o.installer_name||'<span style="color:var(--text3)">未指派</span>'}</td>
         <td>${statusBadge(o.status)}</td>
+        <td style="white-space:nowrap;font-size:12px">
+          ${o.approved_by ? `<span style="color:var(--green);font-weight:600">${o.approved_by}</span><br><span style="color:var(--text3);font-size:11px">${fmtTW(o.approved_at)}</span>` : '<span style="color:var(--text3)">—</span>'}
+        </td>
         <td style="white-space:nowrap">${o.arrival_date||'—'}</td>
         <td style="white-space:nowrap">${o.delivery_date||'—'}</td>
         <td style="white-space:nowrap">${o.created_at?.slice(0,10)||'—'}</td>
@@ -1187,12 +1190,19 @@ function renderOrderDetail(){
   const link = `${API}/installer/${o.order_id}`;
   document.getElementById('od-installer-link').textContent = link;
 
-  // 時間戳記
-  document.getElementById('od-timestamps').innerHTML = [
-    ['建立時間', o.created_at],
-    ['到場時間', o.arrived_at],
-    ['完工時間', o.completed_at],
-  ].filter(([,v])=>v).map(([k,v])=>`<div><span style="color:var(--text3)">${k}：</span>${fmtTW(v)}</div>`).join('');
+  // 時間戳記（含審核人員）
+  const tsRows = [
+    ['建立時間', o.created_at,   null],
+    ['到場時間', o.arrived_at,   null],
+    ['完工時間', o.completed_at, null],
+    ['審核通過', o.approved_at,  o.approved_by],
+  ];
+  document.getElementById('od-timestamps').innerHTML = tsRows
+    .filter(([,v])=>v)
+    .map(([k,v,who])=>`<div>
+      <span style="color:var(--text3)">${k}：</span>${fmtTW(v)}
+      ${who ? `<span style="margin-left:6px;background:var(--green-bg);color:var(--green);border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600">${who}</span>` : ''}
+    </div>`).join('');
 
   // 操作按鈕（依狀態）
   let btns = '';
