@@ -45,9 +45,7 @@ BASE_URL        = os.getenv("BASE_URL", "http://localhost:5000")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ── 登入 Session 管理（記憶體）─────────────────────────────
-# { token_str: { id, username, display_name, role } }
-_sessions: dict[str, dict] = {}
+# ── 登入 Session 管理（SQLite，跨 worker 共享）────────────
 
 # ── 資料庫 ─────────────────────────────────────────────────
 def get_db():
@@ -129,6 +127,14 @@ def init_db():
             is_active     INTEGER DEFAULT 1,
             created_at    TEXT DEFAULT (datetime('now','localtime'))
         );
+        CREATE TABLE IF NOT EXISTS login_sessions (
+            token        TEXT PRIMARY KEY,
+            account_id   INTEGER NOT NULL,
+            username     TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            role         TEXT NOT NULL,
+            created_at   TEXT DEFAULT (datetime('now','localtime'))
+        );
         CREATE INDEX IF NOT EXISTS idx_orders_installer ON orders(installer_id);
         CREATE INDEX IF NOT EXISTS idx_orders_status    ON orders(status);
         CREATE INDEX IF NOT EXISTS idx_photos_order     ON photos(order_id);
@@ -190,12 +196,18 @@ def _resolve_auth():
     token = request.headers.get("X-Admin-Token") or request.args.get("token")
     if not token:
         return None
-    # Session token
-    if token in _sessions:
-        return _sessions[token]
-    # 向下相容：舊的 ADMIN_TOKEN
+    # 向下相容：舊的 ADMIN_TOKEN（環境變數）
     if token == ADMIN_TOKEN:
         return {"id": 0, "username": "admin", "display_name": "Admin(ENV)", "role": "admin"}
+    # SQLite-backed session（跨 gunicorn worker 共享）
+    db = get_db()
+    row = db.execute(
+        "SELECT account_id,username,display_name,role FROM login_sessions WHERE token=?",
+        (token,)
+    ).fetchone()
+    if row:
+        return {"id": row["account_id"], "username": row["username"],
+                "display_name": row["display_name"], "role": row["role"]}
     return None
 
 def require_token(f):
@@ -243,7 +255,11 @@ def auth_login():
         "id": acc["id"], "username": acc["username"],
         "display_name": acc["display_name"], "role": acc["role"],
     }
-    _sessions[token] = user_info
+    db.execute(
+        "INSERT OR REPLACE INTO login_sessions(token,account_id,username,display_name,role) VALUES(?,?,?,?,?)",
+        (token, acc["id"], acc["username"], acc["display_name"], acc["role"])
+    )
+    db.commit()
     logger.info(f"登入成功: {username} (role={acc['role']})")
     return jsonify({"ok": True, "token": token, "user": user_info})
 
@@ -251,9 +267,13 @@ def auth_login():
 @app.route("/api/auth/logout", methods=["POST"])
 def auth_logout():
     token = request.headers.get("X-Admin-Token")
-    if token and token in _sessions:
-        logger.info(f"登出: {_sessions[token]['username']}")
-        del _sessions[token]
+    if token:
+        db = get_db()
+        row = db.execute("SELECT username FROM login_sessions WHERE token=?", (token,)).fetchone()
+        if row:
+            logger.info(f"登出: {row['username']}")
+            db.execute("DELETE FROM login_sessions WHERE token=?", (token,))
+            db.commit()
     return jsonify({"ok": True})
 
 
