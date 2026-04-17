@@ -287,17 +287,34 @@ function renderOrder(){
   document.getElementById('loading-0').style.display='none';
   document.getElementById('order-info').style.display='block';
 
-  // 已完成 / 已作廢 → 唯讀模式，隱藏所有操作按鈕
-  const locked = ['已完成','已作廢'].includes(order.status);
-  if(locked){
+  // 狀態旗標
+  const isPending  = order.status === '待審核';
+  const isFinished = ['已完成','已作廢'].includes(order.status);
+
+  if(isFinished){
+    // 完全唯讀：隱藏所有操作
     document.getElementById('next-btn').style.display='none';
     document.getElementById('arrive-btn').style.display='none';
-    // 在頁首顯示狀態提示
     const statusColors={'已完成':'#2d7a4f','已作廢':'#888'};
     const tip=document.createElement('div');
     tip.style.cssText=`background:${statusColors[order.status]||'#888'};color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600`;
     tip.textContent = order.status==='已完成' ? '✅ 此工單已完成審核，僅供查詢' : '🚫 此工單已作廢';
     document.querySelector('.hdr').after(tip);
+  } else if(isPending){
+    // 待審核：已送出，等待後台審核 → 隱藏步驟導航與底部按鈕，跳至完工確認頁
+    document.getElementById('next-btn').style.display='none';
+    document.getElementById('arrive-btn').style.display='none';
+    const tip=document.createElement('div');
+    tip.style.cssText='background:#8a5a00;color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600';
+    tip.textContent='⏳ 完工資料已送出，等待後台審核';
+    document.querySelector('.hdr').after(tip);
+    // 自動切到第 4 步（完工確認），展示已上傳紀錄
+    setTimeout(()=>{
+      gotoStep(3);
+      document.getElementById('submit-btn').style.display='none';
+      document.getElementById('submit-done').style.display='block';
+      loadInstallerPhotos('submit-photos');
+    }, 0);
   }
 
   document.getElementById('hdr-order-id').textContent = order.order_id;
@@ -340,8 +357,8 @@ function renderOrder(){
   document.getElementById('confirm-oid').textContent=order.order_id;
   // 不在此初始化簽名畫布（step-3 尚隱藏，offsetWidth=0）
 
-  // 已送出的工單（待審核/已完成/已作廢）→ 顯示照片查詢卡
-  if(['待審核','已完成','已作廢'].includes(order.status)){
+  // 已完成/已作廢 → 在 step-0 顯示照片查詢卡（待審核改在 step-3 顯示）
+  if(['已完成','已作廢'].includes(order.status)){
     document.getElementById('inst-photos-card').style.display='block';
     loadInstallerPhotos('inst-photos-body');
   }
@@ -384,7 +401,9 @@ function rebuildPhotoSection(sectionId){
   }
 }
 
-function isLocked(){ return ['已完成','已作廢'].includes(order?.status); }
+// 待審核：已送出等待審核，禁止再次拍照/送出
+// 已完成/已作廢：審核結束，完全唯讀
+function isLocked(){ return ['待審核','已完成','已作廢'].includes(order?.status); }
 
 function captureRequiredPhoto(key){
   if(isLocked()) return;
@@ -514,7 +533,9 @@ function gotoStep(i){
     if(j<i) p.classList.add('done');
   });
   currentStep=i;
-  document.getElementById('next-btn').style.display = i===3?'none':'block';
+  // 唯讀狀態（待審核/已完成/已作廢）不顯示「下一步」按鈕
+  const navHidden = isLocked();
+  document.getElementById('next-btn').style.display = (navHidden || i===3) ? 'none' : 'block';
   document.getElementById('next-btn').textContent = ['前往施工前拍照','前往完工拍照','前往完工確認',''][i]||'下一步';
   if(i===3) initSig(); // step-3 已顯示，此時 offsetWidth 有正確值
 }
@@ -587,7 +608,11 @@ async function uploadSignature(){
 }
 
 async function doSubmit(){
-  if(isLocked()){ alert('此工單已完成，無法再送出'); return; }
+  if(isLocked()){
+    const msgs = {'待審核':'此工單已送出，正在等待後台審核', '已完成':'此工單已完成審核', '已作廢':'此工單已作廢'};
+    alert(msgs[order?.status] || '此工單無法再送出');
+    return;
+  }
   const btn=document.getElementById('submit-btn');
   btn.disabled=true; btn.textContent='上傳中...';
   const n=await uploadAllPhotos();
