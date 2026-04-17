@@ -940,9 +940,10 @@ def delete_user(line_id):
     db = get_db()
     if not db.execute("SELECT 1 FROM users WHERE line_id=?", (line_id,)).fetchone():
         return jsonify({"error": "找不到此使用者"}), 404
-    # 檢查是否有進行中工單
+    # 檢查是否有進行中工單（已完成、退回、已作廢 視為非進行中）
     active = db.execute(
-        "SELECT COUNT(*) FROM orders WHERE installer_id=? AND status NOT IN ('已完成','退回')",
+        "SELECT COUNT(*) FROM orders WHERE installer_id=? "
+        "AND status NOT IN ('已完成','退回','已作廢')",
         (line_id,)
     ).fetchone()[0]
     if active:
@@ -962,14 +963,17 @@ def export_excel():
     try:
         import pandas as pd
         db  = get_db()
-        df  = pd.read_sql(
-            "SELECT order_id,source,car_no,car_type,engine_no,location,"
-            "install_date,items,status,installer_id,reject_reason,arrived_at,"
-            "completed_at,created_at FROM orders ORDER BY created_at DESC",
+        df = pd.read_sql(
+            "SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,o.location,"
+            "o.install_date,o.arrival_date,o.delivery_date,o.items,o.status,"
+            "u.name as installer_name,o.reject_reason,"
+            "o.arrived_at,o.completed_at,o.created_at "
+            "FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id "
+            "ORDER BY o.created_at DESC",
             db
         )
-        df.columns = ["工單號","來源","車牌","車型","引擎號","地點","安裝日期",
-                      "配件","狀態","技師ID","退回原因","到場時間","完工時間","建立時間"]
+        df.columns = ["工單號","來源","車牌","車型","引擎號","地點","安裝日期","到車日","交車日",
+                      "配件","狀態","技師姓名","退回/作廢原因","到場時間","完工時間","建立時間"]
         path = "/tmp/orders_export.xlsx"
         df.to_excel(path, index=False)
         return send_file(path, as_attachment=True, download_name="工單匯出.xlsx")
