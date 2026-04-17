@@ -1156,8 +1156,32 @@ function renderOrderDetail(){
   document.getElementById('od-order-id-field').textContent = o.order_id;
   document.getElementById('od-status-badge').innerHTML = statusBadge(o.status);
 
-  // 已完成/已作廢 → 禁止修改
-  const readOnly = ['已完成','已作廢'].includes(o.status);
+  // 已作廢橫幅（放在兩欄 grid 之前）
+  const bannerId = 'od-void-banner';
+  let banner = document.getElementById(bannerId);
+  const gridEl = document.querySelector('#v-order-detail > .card, #v-order-detail > div[style*="grid"]');
+  if(isVoided){
+    if(!banner){
+      banner = document.createElement('div');
+      banner.id = bannerId;
+      banner.style.cssText = [
+        'background:#e8e8ee','border:1px solid #ccc','border-radius:10px',
+        'padding:11px 16px','font-size:13px','color:#555','font-weight:600',
+        'margin-bottom:14px','display:flex','align-items:center','gap:8px'
+      ].join(';');
+      banner.innerHTML = '🚫 此工單已作廢，所有欄位僅供查閱，無法修改';
+      // 插到麵包屑後面、grid 前面
+      const breadcrumb = document.querySelector('#v-order-detail > div');
+      breadcrumb?.after(banner);
+    }
+  } else {
+    banner?.remove();
+  }
+
+  // 已完成：禁止修改（按鈕保留但灰色，提示需先取消審核）
+  // 已作廢：完全唯讀，儲存按鈕隱藏
+  const isVoided   = o.status === '已作廢';
+  const readOnly   = ['已完成','已作廢'].includes(o.status);
 
   // 填入可編輯欄位
   document.getElementById('od-source').value       = o.source||'';
@@ -1175,6 +1199,8 @@ function renderOrderDetail(){
   const grid = document.getElementById('od-acc-grid');
   grid.innerHTML = _accList.map(a=>{
     const on = checked.includes(a.name);
+    // 已作廢：只顯示已勾選的項目，其他隱藏
+    if(isVoided && !on) return '';
     return `<label class="acc-item ${on?'on':''} ${readOnly?'acc-disabled':''}">
       <input type="checkbox" value="${a.name}" ${on?'checked':''} ${readOnly?'disabled':''}> ${a.name}
     </label>`;
@@ -1230,16 +1256,24 @@ function renderOrderDetail(){
 
   // 套用 readOnly：儲存按鈕 + 所有表單欄位
   const saveBtn = document.getElementById('od-save-btn');
-  saveBtn.disabled      = readOnly;
-  saveBtn.style.opacity = readOnly ? '0.4' : '1';
-  saveBtn.title         = readOnly
-    ? (o.status==='已完成' ? '已完成工單不可修改，請先取消審核' : '已作廢工單不可修改')
-    : '';
-  // input / textarea / select（排除操作區按鈕）
+  if(isVoided){
+    // 已作廢：完全隱藏儲存按鈕
+    saveBtn.style.display = 'none';
+  } else {
+    saveBtn.style.display = '';
+    saveBtn.disabled      = readOnly;
+    saveBtn.style.opacity = readOnly ? '0.4' : '1';
+    saveBtn.title         = readOnly ? '已完成工單不可修改，請先取消審核' : '';
+  }
+  // 所有基本資訊欄位：唯讀（已作廢：加底色提示；已完成：一般灰色）
   document.querySelectorAll(
     '#od-source, #od-car-no, #od-engine-no, #od-car-type, #od-location, ' +
     '#od-install-date, #od-arrival-date, #od-delivery-date, #od-note'
-  ).forEach(el => { el.disabled = readOnly; });
+  ).forEach(el => {
+    el.disabled = readOnly;
+    el.style.background = isVoided ? '#f5f5f7' : '';
+    el.style.color      = isVoided ? '#999'    : '';
+  });
 }
 
 async function saveOrderDetail(){
