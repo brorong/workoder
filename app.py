@@ -755,7 +755,7 @@ def list_photos(order_id):
     for r in rows:
         result.append({
             **dict(r),
-            "url": f"{BASE_URL}/api/photos/{r['filename']}"
+            "url": f"/api/photos/{r['filename']}"
         })
     return jsonify(result)
 
@@ -797,7 +797,7 @@ def upload_photo(order_id):
     )
     db.commit()
     logger.info(f"照片上傳 {filename} → {order_id} [{photo_type}]")
-    return jsonify({"ok": True, "filename": filename, "url": f"{BASE_URL}/api/photos/{filename}"}), 201
+    return jsonify({"ok": True, "filename": filename, "url": f"/api/photos/{filename}"}), 201
 
 
 @app.route("/api/photos/<filename>")
