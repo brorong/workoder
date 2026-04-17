@@ -1038,18 +1038,6 @@ async function doAssign(){
   closeModal('assign-modal');
 }
 
-function openReject(oid){
-  document.getElementById('m-reject-order-id').value=oid;
-  document.getElementById('reject-modal').classList.add('open');
-}
-async function doReject(){
-  const oid=document.getElementById('m-reject-order-id').value;
-  const reason=document.getElementById('m-reason').value.trim()||'未說明';
-  const res=await fetch(`${API}/api/orders/${oid}/reject`,{method:'POST',headers:headers(),body:JSON.stringify({reason})});
-  if(res.ok){ toast('已退回'); addNotifyLog(`❌ ${oid} 退回：${reason}`); loadOrders(); }
-  closeModal('reject-modal');
-}
-
 async function doApprove(oid){
   if(!confirm(`確定通過工單 ${oid}？`)) return;
   try{
@@ -1302,9 +1290,15 @@ async function odAssign(){
   finally{ if(btn){ btn.textContent='指派並發送通知'; btn.disabled=false; } }
 }
 async function odRecall(){
-  if(!confirm(`確定收回工單 ${_currentOrder.order_id}？`)) return;
-  const res = await fetch(`${API}/api/orders/${_currentOrder.order_id}/recall`,{method:'POST',headers:headers()});
-  if(res.ok){ toast('已收回'); await openOrderDetail(_currentOrder.order_id); }
+  const oid = _currentOrder?.order_id;
+  if(!oid) return;
+  if(!confirm(`確定收回工單 ${oid}？`)) return;
+  try{
+    const res = await fetch(`${API}/api/orders/${oid}/recall`,{method:'POST',headers:headers()});
+    const d = await res.json().catch(()=>({}));
+    if(res.ok){ toast('已收回'); await openOrderDetail(oid); loadOrders(); }
+    else toast(`收回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
+  }catch(e){ toast('網路錯誤：'+e.message, false); }
 }
 async function odApprove(){
   const oid = _currentOrder?.order_id;
