@@ -340,6 +340,42 @@ textarea { min-height:70px; resize:vertical; }
           <div id="gallery-area"></div>
         </div>
       </div>
+
+      <!-- 圖片備份（只備份照片，檔名：工單號_序號） -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-hd">
+          <span class="card-title">圖片備份下載</span>
+          <span style="font-size:11px;color:var(--text3);font-weight:400">
+            下載 ZIP 後請存到 OneDrive 同步資料夾（例如 C:\Users\你\OneDrive\WorkoderBackup）
+          </span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:10px;align-items:flex-end;margin-bottom:10px">
+            <div class="fg">
+              <label>上傳日期（起）</label>
+              <input type="date" id="bk-date-from">
+            </div>
+            <div class="fg">
+              <label>上傳日期（迄）</label>
+              <input type="date" id="bk-date-to">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
+              <input type="checkbox" id="bk-include-sig" style="width:auto;margin:0">
+              <label for="bk-include-sig" style="margin:0;cursor:pointer">含簽名圖</label>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn" onclick="backupClearDates()">清除</button>
+              <button class="btn btn-p" onclick="backupPhotos()">下載 ZIP</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text3);line-height:1.6">
+            • 不填日期 = 備份全部歷史照片<br>
+            • 檔名格式：<code>{工單號碼}_{序號}.jpg</code>（例如 <code>R20260400001_001.jpg</code>）<br>
+            • ZIP 內會依工單號建立子資料夾，方便日後整理<br>
+            • 建議建立 <code>OneDrive\WorkoderBackup</code> 資料夾，每次下載後丟進去 → OneDrive 會自動同步到雲端
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- NOTIFY -->
@@ -1100,6 +1136,52 @@ async function doRecall(oid){
     if(res.ok){ toast('已收回'); refreshAll(); }
     else toast(`收回失敗（${res.status}）：${d.error||'請稍後再試'}`, false);
   }catch(e){ toast('網路錯誤：'+e.message, false); }
+}
+
+// ── 圖片備份下載 ───────────────────────────────────────────
+function backupClearDates(){
+  document.getElementById('bk-date-from').value='';
+  document.getElementById('bk-date-to').value='';
+  document.getElementById('bk-include-sig').checked=false;
+}
+
+async function backupPhotos(){
+  const df = document.getElementById('bk-date-from').value;
+  const dt = document.getElementById('bk-date-to').value;
+  const sig = document.getElementById('bk-include-sig').checked;
+  const p = new URLSearchParams();
+  if(df) p.set('date_from', df);
+  if(dt) p.set('date_to', dt);
+  if(sig) p.set('include_signature','1');
+
+  const rangeMsg = (df||dt) ? `${df||'最早'} ~ ${dt||'最新'}` : '全部歷史照片';
+  toast(`備份中：${rangeMsg}…`);
+
+  try{
+    // fetch 以便抓取 response header 的統計資訊
+    const res = await fetch(`${API}/api/gallery/backup?${p}`, { headers: headers() });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({error:`下載失敗 (${res.status})`}));
+      toast(err.error||'下載失敗', false);
+      return;
+    }
+    const count   = res.headers.get('X-Backup-Count')   || '0';
+    const missing = res.headers.get('X-Backup-Missing') || '0';
+    const orders  = res.headers.get('X-Backup-Orders')  || '0';
+    // 觸發下載
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition')||'';
+    const m  = cd.match(/filename="?([^";]+)/i);
+    const filename = m ? decodeURIComponent(m[1]) : `photos_backup_${Date.now()}.zip`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+    toast(`✅ 下載完成：${orders} 張工單、${count} 張照片${missing!=='0'?`（缺檔 ${missing}）`:''}`);
+  }catch(e){
+    toast('備份失敗：'+e.message, false);
+  }
 }
 
 async function loadPhotos(){
