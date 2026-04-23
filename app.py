@@ -996,26 +996,88 @@ def delete_user(line_id):
 @app.route("/api/export/excel")
 @require_token
 def export_excel():
+    """按照工單列表的查詢條件匯出 Excel；一張工單若有多筆配件則拆成多行"""
     try:
         import pandas as pd
-        db  = get_db()
-        df = pd.read_sql(
-            "SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,o.location,"
-            "o.install_date,o.arrival_date,o.delivery_date,o.items,o.status,"
-            "u.name as installer_name,o.reject_reason,"
-            "o.arrived_at,o.completed_at,o.approved_by,o.approved_at,o.created_at "
-            "FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id "
-            "ORDER BY o.created_at DESC",
-            db
-        )
-        df.columns = ["工單號","來源","車牌","車型","引擎號","地點","安裝日期","到車日","交車日",
-                      "配件","狀態","技師姓名","退回/作廢原因",
-                      "到場時間","完工時間","審核人員","審核時間","建立時間"]
-        path = "/tmp/orders_export.xlsx"
-        df.to_excel(path, index=False)
-        return send_file(path, as_attachment=True, download_name="工單匯出.xlsx")
     except ImportError:
         return jsonify({"error": "請安裝 pandas 和 openpyxl"}), 500
+
+    db = get_db()
+    conditions, params = [], []
+    if v := request.args.get("status"):
+        conditions.append("o.status=?"); params.append(v)
+    if v := request.args.get("car_no"):
+        conditions.append("o.car_no LIKE ?"); params.append(f"%{v}%")
+    if v := request.args.get("order_id"):
+        conditions.append("o.order_id LIKE ?"); params.append(f"%{v}%")
+    if v := request.args.get("date_from"):
+        conditions.append("DATE(o.created_at)>=?"); params.append(v)
+    if v := request.args.get("date_to"):
+        conditions.append("DATE(o.created_at)<=?"); params.append(v)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    sql = f"""SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,o.location,
+                     o.install_date,o.arrival_date,o.delivery_date,o.items,o.note,o.status,
+                     u.name as installer_name,o.reject_reason,
+                     o.arrived_at,o.completed_at,o.approved_by,o.approved_at,o.created_at
+              FROM orders o LEFT JOIN users u ON o.installer_id=u.line_id
+              {where}
+              ORDER BY o.created_at DESC"""
+    rows = db.execute(sql, params).fetchall()
+
+    # 建立配件名稱 → acc_id 對應
+    acc_map = {}
+    try:
+        for a in db.execute("SELECT name,acc_id FROM accessories").fetchall():
+            acc_map[a["name"]] = a["acc_id"] or ""
+    except Exception:
+        pass
+
+    # 一張工單若有多筆配件，拆成多行
+    records = []
+    for r in rows:
+        d = dict(r)
+        items = [s.strip() for s in (d.get("items") or "").split(",") if s.strip()]
+        if not items:
+            items = [""]
+        for item in items:
+            records.append({
+                "工單號":       d["order_id"],
+                "配件ID":       acc_map.get(item, ""),
+                "配件":         item,
+                "車牌":         d["car_no"] or "",
+                "車型":         d["car_type"] or "",
+                "引擎號":       d["engine_no"] or "",
+                "來源":         d["source"] or "",
+                "地點":         d["location"] or "",
+                "安裝日期":     d["install_date"] or "",
+                "到車日":       d["arrival_date"] or "",
+                "交車日":       d["delivery_date"] or "",
+                "狀態":         d["status"] or "",
+                "技師姓名":     d["installer_name"] or "",
+                "備註":         d["note"] or "",
+                "退回/作廢原因": d["reject_reason"] or "",
+                "到場時間":     d["arrived_at"] or "",
+                "完工時間":     d["completed_at"] or "",
+                "審核人員":     d["approved_by"] or "",
+                "審核時間":     d["approved_at"] or "",
+                "建立時間":     d["created_at"] or "",
+            })
+
+    df = pd.DataFrame(records, columns=[
+        "工單號","配件ID","配件","車牌","車型","引擎號","來源","地點",
+        "安裝日期","到車日","交車日","狀態","技師姓名","備註","退回/作廢原因",
+        "到場時間","完工時間","審核人員","審核時間","建立時間"
+    ])
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(DATA_DIR if 'DATA_DIR' in globals() else "/tmp", f"orders_export_{ts}.xlsx")
+    try:
+        df.to_excel(path, index=False)
+    except Exception:
+        path = f"/tmp/orders_export_{ts}.xlsx"
+        df.to_excel(path, index=False)
+    return send_file(path, as_attachment=True, download_name=f"工單匯出_{ts}.xlsx")
 
 
 # ══════════════════════════════════════════════════════════════

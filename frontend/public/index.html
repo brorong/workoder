@@ -204,7 +204,7 @@ textarea { min-height:70px; resize:vertical; }
   <div class="topbar">
     <div class="page-title" id="page-title">總覽</div>
     <div class="btn-row">
-      <button class="btn btn-sm" onclick="exportExcel()">匯出 Excel</button>
+      <button class="btn btn-sm" id="topbar-export-btn" onclick="exportExcel()" style="display:none">匯出 Excel</button>
       <button class="btn btn-sm btn-p" onclick="nav('create', document.querySelectorAll('.nav-item')[1])">+ 新建工單</button>
     </div>
   </div>
@@ -866,6 +866,9 @@ function nav(view, el){
   document.getElementById('v-'+view).classList.add('active');
   el.classList.add('active');
   document.getElementById('page-title').textContent = pageTitles[view]||view;
+  // 匯出 Excel 按鈕只在「工單列表」顯示
+  const exportBtn = document.getElementById('topbar-export-btn');
+  if(exportBtn) exportBtn.style.display = (view==='orders') ? '' : 'none';
   if(view==='dashboard') loadDashboard();
   if(view==='orders') loadOrders();
   if(view==='users') loadUsers();
@@ -1144,7 +1147,20 @@ function addNotifyLog(msg){
 }
 
 async function exportExcel(){
-  window.open(`${API}/api/export/excel?token=${AUTH_TOKEN}`);
+  // 沿用工單列表的查詢條件
+  const p = new URLSearchParams();
+  p.set('token', AUTH_TOKEN);
+  const status   = document.getElementById('status-filter')?.value;
+  const orderId  = document.getElementById('f-order-id')?.value.trim();
+  const carNo    = document.getElementById('f-search-car')?.value.trim();
+  const dateFrom = document.getElementById('f-date-from')?.value;
+  const dateTo   = document.getElementById('f-date-to')?.value;
+  if(status)   p.set('status', status);
+  if(orderId)  p.set('order_id', orderId);
+  if(carNo)    p.set('car_no', carNo);
+  if(dateFrom) p.set('date_from', dateFrom);
+  if(dateTo)   p.set('date_to', dateTo);
+  window.open(`${API}/api/export/excel?${p}`);
 }
 
 // ── 工單維護 ────────────────────────────────────────────────
