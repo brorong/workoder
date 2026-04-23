@@ -162,10 +162,9 @@ input[type=file]{display:none}
 <!-- STEP 1: 施工前拍照 -->
 <div class="page" id="step-1">
   <div class="card">
-    <div class="card-hd">施工前免責記錄</div>
+    <div class="card-hd">施工前照片</div>
     <div class="card-body">
-      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">拍攝以下照片，作為車輛原況記錄，保障雙方權益</p>
-      <div id="before-photos"></div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">拍攝車輛原況照片，作為免責記錄</p>
       <div id="extra-before"></div>
     </div>
   </div>
@@ -174,9 +173,9 @@ input[type=file]{display:none}
 <!-- STEP 2: 完工拍照 -->
 <div class="page" id="step-2">
   <div class="card">
-    <div class="card-hd">完工拍照（依配件動態展開）</div>
+    <div class="card-hd">完工照片</div>
     <div class="card-body">
-      <div id="after-photos"></div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">拍攝配件安裝後的完工照片</p>
       <div id="extra-after"></div>
     </div>
   </div>
@@ -275,6 +274,17 @@ async function loadOrder(){
   try{
     await loadAccessories();
     const res = await fetch(`${API}/api/orders/${ORDER_ID}`);
+    if(res.status === 410){
+      const data = await res.json().catch(()=>({}));
+      document.getElementById('loading-0').innerHTML=`
+        <div style="max-width:360px;margin:60px auto;text-align:center;padding:32px 24px;background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08)">
+          <div style="font-size:48px;margin-bottom:16px">🔒</div>
+          <div style="font-size:18px;font-weight:700;color:#333;margin-bottom:10px">工單查詢期限已過</div>
+          <div style="font-size:14px;color:#666;line-height:1.6">審核通過後 <strong>3天內</strong> 可透過連結查詢工單資訊，<br>逾期將自動關閉查詢權限。</div>
+          <div style="margin-top:20px;font-size:13px;color:#aaa">如有疑問請聯繫管理員</div>
+        </div>`;
+      return;
+    }
     if(!res.ok) throw new Error('工單不存在');
     order = await res.json();
     renderOrder();
@@ -336,21 +346,8 @@ function renderOrder(){
     document.getElementById('arrive-btn').disabled=true;
     document.getElementById('arrive-btn').textContent='已到達現場';
   }
-  // Build before photos
-  document.getElementById('before-photos').innerHTML = BEFORE_PHOTOS.map(p=>photoSlot('before:'+p, p)).join('');
+  // 施工前 / 完工照片（只保留其它照片模式）
   renderExtraSection('before');
-  // Build after photos from items
-  const items = (order.items||'').split(',').map(s=>s.trim()).filter(Boolean);
-  let afterHTML='';
-  items.forEach(item=>{
-    const ps = ITEM_PHOTOS[item];
-    if(!ps){ afterHTML+=photoSlot('after:other:'+item, item+'（安裝照）'); return; }
-    afterHTML+=`<div class="photo-section"><div class="photo-sec-title">${item}</div>`;
-    ps.forEach(p=>{ afterHTML+=photoSlot('after:'+item+':'+p, p); });
-    afterHTML+='</div>';
-  });
-  if(!afterHTML) afterHTML='<p style="color:var(--text3);font-size:13px;margin-bottom:4px">此工單無必要完工照</p>';
-  document.getElementById('after-photos').innerHTML=afterHTML;
   renderExtraSection('after');
   // Confirm page
   document.getElementById('confirm-plate').textContent=order.car_no;
@@ -429,7 +426,7 @@ function renderExtraSection(type){
   if(!el) return;
   const arr = extraPhotos[type];
   const canAdd = arr.length < MAX_EXTRA;
-  const sectionLabel = type==='before' ? '施工前其它照片' : '完工其它照片';
+  const sectionLabel = type==='before' ? '施工前照片' : '完工照片';
 
   let html = `<div class="extra-section-hd">
     <span>${sectionLabel}</span>
@@ -458,7 +455,7 @@ function renderExtraSection(type){
 
 function captureExtraPhoto(type){
   if(isLocked() || extraPhotos[type].length >= MAX_EXTRA) return;
-  openCamera(type==='before'?'施工前其它照片':'完工其它照片', file => {
+  openCamera(type==='before'?'施工前照片':'完工照片', file => {
     if(!file) return;
     extraPhotos[type].push({ file, url: URL.createObjectURL(file) });
     renderExtraSection(type);

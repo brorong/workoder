@@ -79,6 +79,28 @@ textarea { min-height:70px; resize:vertical; }
 .acc-item.on { border-color:var(--blue); background:var(--blue-bg); color:var(--blue); }
 .acc-item input { width:auto; margin:0; }
 .acc-item.acc-disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
+/* 配件下拉式多選檢索 */
+.acc-picker { border:1px solid var(--border2); border-radius:10px; padding:10px; background:var(--surface); }
+.acc-picker-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:28px; align-items:center; }
+.acc-tag { display:inline-flex; align-items:center; gap:5px; background:var(--blue-bg); color:var(--blue); border:1px solid var(--blue); border-radius:99px; padding:3px 4px 3px 5px; font-size:12px; font-weight:500; }
+.acc-tag-x { background:none; border:none; color:var(--blue); cursor:pointer; font-size:14px; line-height:1; padding:0 4px; border-radius:99px; }
+.acc-tag-x:hover { background:rgba(21,101,192,.15); }
+.acc-tag-ro { background:var(--surface2); color:var(--text2); border-color:var(--border2); padding:3px 5px 3px 5px; }
+.acc-tag-id { display:inline-block; font-family:var(--mono); font-size:10px; font-weight:700; background:var(--blue); color:#fff; padding:2px 7px; border-radius:99px; letter-spacing:.03em; }
+.acc-tag-ro .acc-tag-id { background:var(--text2); color:#fff; }
+.acc-tag-empty { color:var(--text3); font-size:12px; padding-left:4px; }
+.acc-picker-search { margin-bottom:8px; }
+.acc-picker-list { max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+.acc-opt { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; }
+.acc-opt:last-child { border-bottom:none; }
+.acc-opt:hover { background:var(--surface2); }
+.acc-opt.on { background:var(--blue-bg); color:var(--blue); font-weight:500; }
+.acc-opt input { width:auto; margin:0; flex:0 0 auto; }
+.acc-opt-id { display:inline-block; min-width:70px; font-family:var(--mono); font-size:11px; font-weight:700; color:var(--blue); background:#e8f1fb; padding:3px 8px; border-radius:5px; letter-spacing:.03em; text-align:center; flex:0 0 auto; }
+.acc-opt-id-empty { color:var(--text3); background:var(--surface2); font-weight:400; }
+.acc-opt.on .acc-opt-id { background:#fff; }
+.acc-opt-name { flex:1; }
+.acc-opt-empty { padding:14px; text-align:center; color:var(--text3); font-size:12px; }
 /* Btn */
 .btn { padding:9px 18px; border-radius:8px; font-size:13px; font-family:var(--sans); cursor:pointer; border:1px solid var(--border2); background:var(--surface); color:var(--text); font-weight:500; }
 .btn:hover { background:var(--surface2); }
@@ -223,8 +245,8 @@ textarea { min-height:70px; resize:vertical; }
             <div class="fg"><label>預計交車日</label><input type="date" id="f-delivery-date"></div>
           </div>
 
-          <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">安裝配件（多選，連動施工端拍照清單）</div>
-          <div class="acc-grid" id="acc-grid" style="margin-bottom:16px">
+          <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">安裝配件（下拉式多選，可搜尋名稱或 ID）</div>
+          <div id="acc-picker" style="margin-bottom:16px">
             <span style="color:var(--text3);font-size:12px">載入中...</span>
           </div>
 
@@ -375,7 +397,7 @@ textarea { min-height:70px; resize:vertical; }
                 <div class="fg"><label>預計交車日</label><input type="date" id="od-delivery-date"></div>
               </div>
               <div style="margin-bottom:12px;font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">安裝配件</div>
-              <div class="acc-grid" id="od-acc-grid" style="margin-bottom:14px"></div>
+              <div id="od-acc-picker" style="margin-bottom:14px"></div>
               <div class="fg"><label>特別要求 / 備註</label><textarea id="od-note"></textarea></div>
             </div>
           </div>
@@ -490,7 +512,7 @@ textarea { min-height:70px; resize:vertical; }
         <div style="overflow-x:auto">
           <table class="tbl" id="acc-table">
             <thead><tr>
-              <th>順序</th><th>配件名稱</th><th>完工拍照項目</th><th>操作</th>
+              <th>順序</th><th>配件ID</th><th>配件名稱</th><th>操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -690,13 +712,13 @@ textarea { min-height:70px; resize:vertical; }
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <input type="hidden" id="acc-edit-id">
       <div class="fg">
-        <label>配件名稱 *</label>
-        <input id="acc-name" placeholder="如：行車紀錄器（單鏡）">
+        <label>配件ID（最多 10 碼）</label>
+        <input id="acc-code" maxlength="10" placeholder="如：DVR001" style="font-family:var(--mono);letter-spacing:.05em">
+        <span style="font-size:11px;color:var(--text3)">選填；可用英文、數字，限 10 碼內</span>
       </div>
       <div class="fg">
-        <label>完工拍照項目（每行一項）</label>
-        <textarea id="acc-photos" style="min-height:120px" placeholder="主機畫面&#10;GPS 位置&#10;後鏡頭安裝位置"></textarea>
-        <span style="font-size:11px;color:var(--text3)">每一行代表一個拍照要求，施工端會依此產生上傳按鈕</span>
+        <label>配件名稱 *</label>
+        <input id="acc-name" placeholder="如：行車紀錄器（單鏡）">
       </div>
       <div class="fg">
         <label>排列順序（數字越小越前面）</label>
@@ -986,7 +1008,7 @@ async function loadUsers(){
 }
 
 async function submitOrder(){
-  const items = [...document.querySelectorAll('#acc-grid input:checked')].map(i=>i.value);
+  const items = getAccPickerValue('acc-picker');
   const body = {
     source: document.getElementById('f-source').value.trim(),
     car_no: document.getElementById('f-car-no').value.trim(),
@@ -1024,8 +1046,7 @@ async function submitOrder(){
 function clearForm(){
   ['f-source','f-car-no','f-engine-no','f-car-type','f-location','f-note'].forEach(id=>document.getElementById(id).value='');
   ['f-date','f-arrival-date','f-delivery-date'].forEach(id=>document.getElementById(id).value='');
-  document.querySelectorAll('#acc-grid input').forEach(i=>i.checked=false);
-  document.querySelectorAll('#acc-grid label').forEach(l=>l.classList.remove('on'));
+  clearAccPicker('acc-picker');
   document.getElementById('create-result').style.display='none';
 }
 
@@ -1152,6 +1173,10 @@ async function openOrderDetail(orderId){
 
 function renderOrderDetail(){
   const o = _currentOrder;
+  // 狀態旗標（必須先宣告，後續 banner / 欄位 / picker 都會用到）
+  const isVoided = o.status === '已作廢';
+  const readOnly = ['已完成','已作廢'].includes(o.status);
+
   document.getElementById('od-order-id').textContent      = o.order_id;
   document.getElementById('od-order-id-field').textContent = o.order_id;
   document.getElementById('od-status-badge').innerHTML = statusBadge(o.status);
@@ -1180,8 +1205,7 @@ function renderOrderDetail(){
 
   // 已完成：禁止修改（按鈕保留但灰色，提示需先取消審核）
   // 已作廢：完全唯讀，儲存按鈕隱藏
-  const isVoided   = o.status === '已作廢';
-  const readOnly   = ['已完成','已作廢'].includes(o.status);
+  // （isVoided / readOnly 已於函式頂端宣告）
 
   // 填入可編輯欄位
   document.getElementById('od-source').value       = o.source||'';
@@ -1194,23 +1218,9 @@ function renderOrderDetail(){
   document.getElementById('od-delivery-date').value = o.delivery_date||'';
   document.getElementById('od-note').value          = o.note||'';
 
-  // 配件多選格（從快取載入）
+  // 配件下拉多選檢索（從快取載入）
   const checked = (o.items||'').split(',').map(s=>s.trim()).filter(Boolean);
-  const grid = document.getElementById('od-acc-grid');
-  grid.innerHTML = _accList.map(a=>{
-    const on = checked.includes(a.name);
-    // 已作廢：只顯示已勾選的項目，其他隱藏
-    if(isVoided && !on) return '';
-    return `<label class="acc-item ${on?'on':''} ${readOnly?'acc-disabled':''}">
-      <input type="checkbox" value="${a.name}" ${on?'checked':''} ${readOnly?'disabled':''}> ${a.name}
-    </label>`;
-  }).join('');
-  grid.querySelectorAll('.acc-item').forEach(item=>{
-    item.addEventListener('change',()=>{
-      if(readOnly) return;
-      item.classList.toggle('on',item.querySelector('input').checked);
-    });
-  });
+  initAccPicker('od-acc-picker', { selected: checked, readOnly: readOnly });
 
   // 施工連結
   const link = `${API}/installer/${o.order_id}`;
@@ -1282,7 +1292,7 @@ async function saveOrderDetail(){
     toast(o.status==='已完成' ? '已完成工單不可修改，請先取消審核' : '已作廢工單不可修改', false);
     return;
   }
-  const items = [...document.querySelectorAll('#od-acc-grid input:checked')].map(i=>i.value);
+  const items = getAccPickerValue('od-acc-picker');
   const body = {
     source:        document.getElementById('od-source').value.trim(),
     car_no:        document.getElementById('od-car-no').value.trim(),
@@ -1470,6 +1480,111 @@ function copyOdLink(){ navigator.clipboard?.writeText(document.getElementById('o
 let _installerCache = [];
 const _origLoadUsers = loadUsers;
 
+// ── 配件下拉多選檢索元件 ─────────────────────────────────────
+// 初始化：initAccPicker('container-id', {selected:[...], readOnly, hideUnchecked})
+// 取值：getAccPickerValue('container-id')  → [name, ...]
+function initAccPicker(containerId, opts){
+  opts = opts || {};
+  const host = document.getElementById(containerId);
+  if(!host) return;
+  host.classList.add('acc-picker');
+  const state = {
+    selected: new Set(opts.selected || []),
+    searchTerm: '',
+    opts,
+    render: null,
+  };
+  host._pickerState = state;
+  const esc = s => String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+  // 建立外殼（只執行一次），input 之後不會被替換，避免中斷中文輸入法組字
+  function buildShell(){
+    const showList = !state.opts.readOnly;
+    host.innerHTML = `
+      <div class="acc-picker-tags" data-role="tags"></div>
+      ${showList ? `<input type="text" class="acc-picker-search" data-role="search" placeholder="🔍 搜尋配件名稱或 ID...">
+        <div class="acc-picker-list" data-role="list"></div>` : ''}`;
+    const searchEl = host.querySelector('[data-role=search]');
+    if(searchEl){
+      // 使用 input 事件：中文輸入法組字完成（commit）後才觸發一次
+      searchEl.addEventListener('input', e => {
+        // 組字進行中不過濾，避免輸入中途被 re-render（compositionstart 期間 input 會觸發但 isComposing=true）
+        if(e.isComposing) return;
+        state.searchTerm = e.target.value;
+        renderTagsAndList();
+      });
+      // Safari/某些瀏覽器 compositionend 後不會再觸發 input，手動補一次
+      searchEl.addEventListener('compositionend', e => {
+        state.searchTerm = e.target.value;
+        renderTagsAndList();
+      });
+    }
+  }
+
+  function renderTagsAndList(){
+    const items = _accList || [];
+    const q = state.searchTerm.trim().toLowerCase();
+    const filtered = q
+      ? items.filter(a => ((a.name||'')+' '+(a.acc_id||'')).toLowerCase().includes(q))
+      : items;
+    const selArr = items.filter(a => state.selected.has(a.name));
+
+    const tagsHTML = selArr.length
+      ? selArr.map(a => {
+          const idPrefix = a.acc_id ? `<span class="acc-tag-id">${a.acc_id}</span>` : '';
+          if(state.opts.readOnly){
+            return `<span class="acc-tag acc-tag-ro">${idPrefix}${a.name}</span>`;
+          }
+          return `<span class="acc-tag">${idPrefix}${a.name}<button class="acc-tag-x" type="button" onclick="__accPickerRemove('${containerId}','${esc(a.name)}')">×</button></span>`;
+        }).join('')
+      : `<span class="acc-tag-empty">${state.opts.readOnly?'（無已選配件）':'尚未選擇配件，請於下方勾選'}</span>`;
+
+    const listHTML = filtered.length
+      ? filtered.map(a => {
+          const on = state.selected.has(a.name);
+          const idPrefix = a.acc_id
+            ? `<span class="acc-opt-id">${a.acc_id}</span>`
+            : `<span class="acc-opt-id acc-opt-id-empty">—</span>`;
+          return `<label class="acc-opt ${on?'on':''}">
+            <input type="checkbox" ${on?'checked':''} onchange="__accPickerToggle('${containerId}','${esc(a.name)}',this.checked)">
+            ${idPrefix}
+            <span class="acc-opt-name">${a.name}</span>
+          </label>`;
+        }).join('')
+      : `<div class="acc-opt-empty">找不到符合「${state.searchTerm}」的配件</div>`;
+
+    const tagsEl = host.querySelector('[data-role=tags]');
+    const listEl = host.querySelector('[data-role=list]');
+    if(tagsEl) tagsEl.innerHTML = tagsHTML;
+    if(listEl) listEl.innerHTML = listHTML;
+  }
+
+  state.render = renderTagsAndList;
+  buildShell();
+  renderTagsAndList();
+}
+function __accPickerToggle(id, name, on){
+  const s = document.getElementById(id)?._pickerState; if(!s) return;
+  if(on) s.selected.add(name); else s.selected.delete(name);
+  s.render();
+}
+function __accPickerRemove(id, name){
+  const s = document.getElementById(id)?._pickerState; if(!s) return;
+  s.selected.delete(name); s.render();
+}
+function __accPickerSearch(id, val){
+  const s = document.getElementById(id)?._pickerState; if(!s) return;
+  s.searchTerm = val || ''; s.render();
+}
+function getAccPickerValue(id){
+  const s = document.getElementById(id)?._pickerState;
+  return s ? [...s.selected] : [];
+}
+function clearAccPicker(id){
+  const s = document.getElementById(id)?._pickerState;
+  if(s){ s.selected.clear(); s.searchTerm=''; s.render(); }
+}
+
 // ── 配件管理 ────────────────────────────────────────────────
 let _accList = []; // 快取配件列表
 
@@ -1491,11 +1606,8 @@ async function loadAccessories(){
   tbody.innerHTML = _accList.map(a=>`
     <tr>
       <td style="color:var(--text3);width:60px">${a.sort_order}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text2);width:140px">${a.acc_id || '<span style="color:var(--text3)">—</span>'}</td>
       <td><strong>${a.name}</strong></td>
-      <td style="max-width:320px">
-        ${a.photos.map(p=>`<span style="display:inline-flex;background:var(--blue-bg);color:var(--blue);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:500;margin:2px">${p}</span>`).join('')}
-        ${!a.photos.length?'<span style="color:var(--text3);font-size:12px">（不需拍照）</span>':''}
-      </td>
       <td>
         <div class="btn-row">
           <button class="btn btn-sm" onclick="openAccModal(${a.id})">編輯</button>
@@ -1507,15 +1619,12 @@ async function loadAccessories(){
 
 async function refreshAccGrid(){
   await fetchAccessories();
-  const grid = document.getElementById('acc-grid');
-  if(!_accList.length){ grid.innerHTML='<span style="color:var(--text3);font-size:12px">尚無配件，請先在「配件管理」新增</span>'; return; }
-  grid.innerHTML = _accList.map(a=>`
-    <label class="acc-item">
-      <input type="checkbox" value="${a.name}"> ${a.name}
-    </label>`).join('');
-  grid.querySelectorAll('.acc-item').forEach(item=>{
-    item.addEventListener('change',()=>item.classList.toggle('on',item.querySelector('input').checked));
-  });
+  const host = document.getElementById('acc-picker');
+  if(!host) return;
+  if(!_accList.length){ host.innerHTML='<span style="color:var(--text3);font-size:12px">尚無配件，請先在「配件管理」新增</span>'; return; }
+  // 保留原選取（重新整理後仍保持使用者已勾選項目）
+  const keep = host._pickerState ? [...host._pickerState.selected] : [];
+  initAccPicker('acc-picker', { selected: keep });
 }
 
 function openAccModal(id){
@@ -1525,11 +1634,11 @@ function openAccModal(id){
     const acc = _accList.find(a=>a.id===id);
     if(!acc) return;
     document.getElementById('acc-name').value = acc.name;
-    document.getElementById('acc-photos').value = acc.photos.join('\n');
+    document.getElementById('acc-code').value = acc.acc_id || '';
     document.getElementById('acc-sort').value = acc.sort_order;
   }else{
     document.getElementById('acc-name').value='';
-    document.getElementById('acc-photos').value='';
+    document.getElementById('acc-code').value='';
     document.getElementById('acc-sort').value='0';
   }
   document.getElementById('acc-modal').classList.add('open');
@@ -1538,10 +1647,14 @@ function openAccModal(id){
 async function saveAccessory(){
   const id = document.getElementById('acc-edit-id').value;
   const name = document.getElementById('acc-name').value.trim();
-  const photos = document.getElementById('acc-photos').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const acc_id = document.getElementById('acc-code').value.trim();
   const sort_order = parseInt(document.getElementById('acc-sort').value)||0;
   if(!name){ toast('請填入配件名稱',false); return; }
-  const body = {name, photos, sort_order};
+  if(acc_id.length > 10){ toast('配件 ID 最多 10 碼',false); return; }
+  // 保留 photos 欄位（後端向下相容），但不再提供 UI 編輯
+  const prev = id ? _accList.find(a=>a.id==id) : null;
+  const photos = prev ? (prev.photos||[]) : [];
+  const body = {name, photos, sort_order, acc_id};
   const url  = id ? `${API}/api/accessories/${id}` : `${API}/api/accessories`;
   const method = id ? 'PUT' : 'POST';
   const res  = await fetch(url,{method,headers:headers(),body:JSON.stringify(body)});

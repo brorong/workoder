@@ -10,7 +10,7 @@ import sqlite3
 import logging
 import threading
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from flask import Flask, request, abort, jsonify, send_file, g
@@ -121,6 +121,7 @@ def init_db():
             name       TEXT NOT NULL UNIQUE,
             photos     TEXT NOT NULL DEFAULT '[]',
             sort_order INTEGER DEFAULT 0,
+            acc_id     TEXT NOT NULL DEFAULT '',
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS accounts (
@@ -156,6 +157,11 @@ def init_db():
                 conn.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT DEFAULT {default}")
             except Exception:
                 pass
+        # 向下相容：accessories 補 acc_id 欄位
+        try:
+            conn.execute("ALTER TABLE accessories ADD COLUMN acc_id TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
         conn.executescript("""
         """)
         # Seed 系統參數（只在首次建立時插入）
@@ -649,6 +655,15 @@ def get_order(order_id):
     # approved_by/approved_at 已由 ALTER TABLE 補欄位，SELECT * 自動包含
     if not row:
         return jsonify({"error": "工單不存在"}), 404
+    # 未登入（安裝員端）存取已完成工單：審核通過超過3天拒絕查詢
+    token = request.headers.get("X-Admin-Token") or request.args.get("token")
+    if not token and row["status"] == "已完成" and row["approved_at"]:
+        try:
+            approved = datetime.strptime(row["approved_at"], "%Y-%m-%d %H:%M:%S")
+            if datetime.now() - approved > timedelta(days=3):
+                return jsonify({"error": "此工單查詢期限已過（審核通過後3天內有效）", "expired": True}), 410
+        except (ValueError, TypeError):
+            pass
     return jsonify(dict(row))
 
 
@@ -1060,15 +1075,18 @@ def generate_order_id() -> str:
 
 @app.route("/api/accessories", methods=["GET"])
 def list_accessories():
-    """取得所有配件（含拍照清單），施工端與後台共用，無需 token"""
+    """取得所有配件，施工端與後台共用，無需 token"""
     db   = get_db()
     rows = db.execute(
-        "SELECT id,name,photos,sort_order FROM accessories ORDER BY sort_order,id"
+        "SELECT id,name,photos,sort_order,acc_id FROM accessories ORDER BY sort_order,id"
     ).fetchall()
     result = []
     for r in rows:
         d = dict(r)
-        d["photos"] = json.loads(d["photos"])
+        try:
+            d["photos"] = json.loads(d["photos"])
+        except Exception:
+            d["photos"] = []
         result.append(d)
     return jsonify(result)
 
@@ -1079,13 +1097,17 @@ def create_accessory():
     data = request.get_json(force=True)
     if not data.get("name","").strip():
         return jsonify({"error": "缺少配件名稱"}), 400
+    acc_code = (data.get("acc_id") or "").strip()
+    if len(acc_code) > 10:
+        return jsonify({"error": "配件 ID 最多 10 碼"}), 400
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO accessories(name,photos,sort_order) VALUES(?,?,?)",
+            "INSERT INTO accessories(name,photos,sort_order,acc_id) VALUES(?,?,?,?)",
             (data["name"].strip(),
              json.dumps(data.get("photos", []), ensure_ascii=False),
-             int(data.get("sort_order", 0)))
+             int(data.get("sort_order", 0)),
+             acc_code)
         )
         db.commit()
     except sqlite3.IntegrityError:
@@ -1099,12 +1121,16 @@ def update_accessory(acc_id):
     data = request.get_json(force=True)
     if not data.get("name","").strip():
         return jsonify({"error": "缺少配件名稱"}), 400
+    acc_code = (data.get("acc_id") or "").strip()
+    if len(acc_code) > 10:
+        return jsonify({"error": "配件 ID 最多 10 碼"}), 400
     db = get_db()
     db.execute(
-        "UPDATE accessories SET name=?,photos=?,sort_order=? WHERE id=?",
+        "UPDATE accessories SET name=?,photos=?,sort_order=?,acc_id=? WHERE id=?",
         (data["name"].strip(),
          json.dumps(data.get("photos", []), ensure_ascii=False),
          int(data.get("sort_order", 0)),
+         acc_code,
          acc_id)
     )
     db.commit()
@@ -1138,7 +1164,59 @@ def index_page():
 
 @app.route("/installer/<order_id>")
 def installer_page(order_id):
-    return send_file(os.path.join(FRONTEND_DIR, "installer.html"))
+    """施工員頁面；同時注入 Open Graph 標籤供 LINE/社群預覽使用"""
+    html_path = os.path.join(FRONTEND_DIR, "installer.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+    except Exception:
+        return send_file(html_path)
+
+    # 讀取工單資料組 OG 說明
+    try:
+        db = get_db()
+        row = db.execute(
+            "SELECT order_id,car_no,car_type,location,install_date,status "
+            "FROM orders WHERE order_id=?",
+            (order_id,)
+        ).fetchone()
+    except Exception:
+        row = None
+
+    if row:
+        title = f"配件安裝通知單  {row['order_id']}"
+        desc_parts = []
+        if row["location"]:     desc_parts.append(f"📍 安裝地點：{row['location']}")
+        if row["install_date"]: desc_parts.append(f"📅 預計安裝日期：{row['install_date']}")
+        if row["car_no"]:       desc_parts.append(f"🚗 車牌號碼：{row['car_no']}")
+        if row["car_type"]:     desc_parts.append(f"🚙 車型：{row['car_type']}")
+        description = "  ｜  ".join(desc_parts) if desc_parts else "配件安裝系統 — 施工員端"
+    else:
+        title = "配件安裝通知單"
+        description = "此工單不存在或已失效"
+
+    # HTML escape
+    def esc(s):
+        return (str(s or "")
+                .replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
+
+    url = request.url
+    og_tags = (
+        f'<meta property="og:type" content="website">\n'
+        f'<meta property="og:title" content="{esc(title)}">\n'
+        f'<meta property="og:description" content="{esc(description)}">\n'
+        f'<meta property="og:url" content="{esc(url)}">\n'
+        f'<meta property="og:site_name" content="配件安裝系統">\n'
+        f'<meta name="twitter:card" content="summary">\n'
+        f'<meta name="twitter:title" content="{esc(title)}">\n'
+        f'<meta name="twitter:description" content="{esc(description)}">\n'
+        f'<meta name="description" content="{esc(description)}">\n'
+    )
+    # 盡量插到 <head> 最前面，取代既有 description（若有）
+    if "<head>" in html:
+        html = html.replace("<head>", "<head>\n" + og_tags, 1)
+    return html
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
