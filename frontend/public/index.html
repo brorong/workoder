@@ -283,7 +283,7 @@ textarea { min-height:70px; resize:vertical; }
     <div class="view" id="v-orders">
       <div class="card" style="margin-bottom:14px">
         <div class="card-body" style="padding:16px 20px">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:flex-end">
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:flex-end">
             <div class="fg">
               <label>工單號碼</label>
               <input id="f-order-id" placeholder="ORD..." oninput="loadOrders()">
@@ -300,7 +300,15 @@ textarea { min-height:70px; resize:vertical; }
               <label>建立日期（迄）</label>
               <input type="date" id="f-date-to" onchange="loadOrders()">
             </div>
-            <div style="display:flex;gap:8px">
+            <div class="fg">
+              <label>完工日期（起）</label>
+              <input type="date" id="f-done-from" onchange="loadOrders()">
+            </div>
+            <div class="fg">
+              <label>完工日期（迄）</label>
+              <input type="date" id="f-done-to" onchange="loadOrders()">
+            </div>
+            <div style="grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end">
               <select id="status-filter" onchange="loadOrders()" style="font-size:12px;padding:9px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text)">
                 <option value="">全部狀態</option>
                 <option>待派工</option><option>待確認</option><option>施工中</option>
@@ -939,11 +947,15 @@ async function loadOrders(){
   const carNo    = document.getElementById('f-search-car')?.value.trim();
   const dateFrom = document.getElementById('f-date-from')?.value;
   const dateTo   = document.getElementById('f-date-to')?.value;
+  const doneFrom = document.getElementById('f-done-from')?.value;
+  const doneTo   = document.getElementById('f-done-to')?.value;
   if(status)   p.set('status', status);
   if(orderId)  p.set('order_id', orderId);
   if(carNo)    p.set('car_no', carNo);
   if(dateFrom) p.set('date_from', dateFrom);
   if(dateTo)   p.set('date_to', dateTo);
+  if(doneFrom) p.set('done_from', doneFrom);
+  if(doneTo)   p.set('done_to', doneTo);
   try{
     const res = await fetch(`${API}/api/orders?${p}`,{headers:headers()});
     const orders = await res.json();
@@ -970,7 +982,7 @@ async function loadOrders(){
 }
 
 function clearOrderSearch(){
-  ['f-order-id','f-search-car','f-date-from','f-date-to'].forEach(id=>{
+  ['f-order-id','f-search-car','f-date-from','f-date-to','f-done-from','f-done-to'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('status-filter').value='';
@@ -1155,11 +1167,15 @@ async function exportExcel(){
   const carNo    = document.getElementById('f-search-car')?.value.trim() || '';
   const dateFrom = document.getElementById('f-date-from')?.value || '';
   const dateTo   = document.getElementById('f-date-to')?.value || '';
+  const doneFrom = document.getElementById('f-done-from')?.value || '';
+  const doneTo   = document.getElementById('f-done-to')?.value || '';
   if(status)   p.set('status', status);
   if(orderId)  p.set('order_id', orderId);
   if(carNo)    p.set('car_no', carNo);
   if(dateFrom) p.set('date_from', dateFrom);
   if(dateTo)   p.set('date_to', dateTo);
+  if(doneFrom) p.set('done_from', doneFrom);
+  if(doneTo)   p.set('done_to', doneTo);
   // 顯示目前匯出條件給使用者確認
   const cond = [
     status   && `狀態=${status}`,
@@ -1167,6 +1183,8 @@ async function exportExcel(){
     carNo    && `車牌含「${carNo}」`,
     dateFrom && `建立日 ≥ ${dateFrom}`,
     dateTo   && `建立日 ≤ ${dateTo}`,
+    doneFrom && `完工日 ≥ ${doneFrom}`,
+    doneTo   && `完工日 ≤ ${doneTo}`,
   ].filter(Boolean).join('、');
   toast(cond ? `匯出條件：${cond}` : '匯出全部工單（未設篩選）');
   window.open(`${API}/api/export/excel?${p}`);

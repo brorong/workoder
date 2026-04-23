@@ -600,6 +600,10 @@ def list_orders():
         conditions.append("DATE(o.created_at)>=?"); params.append(v)
     if v := request.args.get("date_to"):
         conditions.append("DATE(o.created_at)<=?"); params.append(v)
+    if v := request.args.get("done_from"):
+        conditions.append("o.completed_at!='' AND DATE(o.completed_at)>=?"); params.append(v)
+    if v := request.args.get("done_to"):
+        conditions.append("o.completed_at!='' AND DATE(o.completed_at)<=?"); params.append(v)
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sql = f"""SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,
@@ -1014,6 +1018,10 @@ def export_excel():
         conditions.append("DATE(o.created_at)>=?"); params.append(v)
     if v := request.args.get("date_to"):
         conditions.append("DATE(o.created_at)<=?"); params.append(v)
+    if v := request.args.get("done_from"):
+        conditions.append("o.completed_at!='' AND DATE(o.completed_at)>=?"); params.append(v)
+    if v := request.args.get("done_to"):
+        conditions.append("o.completed_at!='' AND DATE(o.completed_at)<=?"); params.append(v)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     sql = f"""SELECT o.order_id,o.source,o.car_no,o.car_type,o.engine_no,o.location,
