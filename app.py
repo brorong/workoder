@@ -15,7 +15,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 
 import requests
-from flask import Flask, request, abort, jsonify, send_file, g
+from flask import Flask, request, abort, jsonify, send_file, g, Response
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
@@ -921,74 +921,86 @@ def gallery_backup():
       - date_to   (YYYY-MM-DD)  optional，結束上傳日
       - include_signature=0/1   optional，預設 0（不含簽名圖）
     """
-    date_from = request.args.get("date_from", "").strip()
-    date_to   = request.args.get("date_to", "").strip()
-    include_sig = request.args.get("include_signature", "0") == "1"
+    try:
+        date_from = request.args.get("date_from", "").strip()
+        date_to   = request.args.get("date_to", "").strip()
+        include_sig = request.args.get("include_signature", "0") == "1"
 
-    db = get_db()
-    conds, params = [], []
-    if date_from:
-        conds.append("DATE(uploaded_at) >= ?"); params.append(date_from)
-    if date_to:
-        conds.append("DATE(uploaded_at) <= ?"); params.append(date_to)
-    if not include_sig:
-        conds.append("photo_type != 'signature'")
-    where = ("WHERE " + " AND ".join(conds)) if conds else ""
-    rows = db.execute(
-        f"SELECT order_id, filename, photo_type, uploaded_at "
-        f"FROM photos {where} ORDER BY order_id, id"
-    ).fetchall()
+        db = get_db()
+        conds, params = [], []
+        if date_from:
+            conds.append("DATE(uploaded_at) >= ?"); params.append(date_from)
+        if date_to:
+            conds.append("DATE(uploaded_at) <= ?"); params.append(date_to)
+        if not include_sig:
+            conds.append("photo_type != 'signature'")
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        sql = (f"SELECT order_id, filename, photo_type, uploaded_at "
+               f"FROM photos {where} ORDER BY order_id, id")
+        logger.info(f"[backup] query: {sql}  params={params}")
+        rows = db.execute(sql, params).fetchall()
+        logger.info(f"[backup] photo rows = {len(rows)}; UPLOAD_FOLDER = {UPLOAD_FOLDER}")
 
-    if not rows:
-        return jsonify({"error": "指定區間內沒有照片可備份"}), 404
+        if not rows:
+            return jsonify({"error": "指定區間內沒有照片可備份"}), 404
 
-    # 建立 ZIP 於記憶體
-    buf = io.BytesIO()
-    added = 0
-    missing = 0
-    per_order_seq = {}   # order_id -> current sequence
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for r in rows:
-            src = os.path.join(UPLOAD_FOLDER, os.path.basename(r["filename"]))
-            if not os.path.exists(src):
-                missing += 1
-                continue
-            ext = os.path.splitext(r["filename"])[1].lower() or ".jpg"
-            oid = r["order_id"]
-            per_order_seq[oid] = per_order_seq.get(oid, 0) + 1
-            seq = per_order_seq[oid]
-            arcname = f"{oid}/{oid}_{seq:03d}{ext}"   # 以工單為子資料夾方便瀏覽
-            try:
-                zf.write(src, arcname)
-                added += 1
-            except Exception:
-                missing += 1
-        # 附一個 README 摘要
-        summary = (
-            f"工單照片備份\n"
-            f"產生時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"區間：{date_from or '最早'} ~ {date_to or '最新'}\n"
-            f"含簽名：{'是' if include_sig else '否'}\n"
-            f"工單數：{len(per_order_seq)}\n"
-            f"成功檔數：{added}\n"
-            f"缺檔數：{missing}\n"
-        )
-        zf.writestr("_README.txt", summary.encode("utf-8"))
+        # 建立 ZIP 於記憶體
+        buf = io.BytesIO()
+        added = 0
+        missing = 0
+        per_order_seq = {}   # order_id -> current sequence
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for r in rows:
+                fname = r["filename"] or ""
+                src = os.path.join(UPLOAD_FOLDER, os.path.basename(fname))
+                if not fname or not os.path.exists(src):
+                    missing += 1
+                    continue
+                ext = os.path.splitext(fname)[1].lower() or ".jpg"
+                oid = r["order_id"] or "UNKNOWN"
+                per_order_seq[oid] = per_order_seq.get(oid, 0) + 1
+                seq = per_order_seq[oid]
+                arcname = f"{oid}/{oid}_{seq:03d}{ext}"
+                try:
+                    zf.write(src, arcname)
+                    added += 1
+                except Exception as e:
+                    logger.warning(f"[backup] zip write fail {src}: {e}")
+                    missing += 1
+            summary = (
+                f"工單照片備份\n"
+                f"產生時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"區間：{date_from or '最早'} ~ {date_to or '最新'}\n"
+                f"含簽名：{'是' if include_sig else '否'}\n"
+                f"工單數：{len(per_order_seq)}\n"
+                f"成功檔數：{added}\n"
+                f"缺檔數：{missing}\n"
+            )
+            zf.writestr("_README.txt", summary.encode("utf-8"))
 
-    buf.seek(0)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name_range = ""
-    if date_from or date_to:
-        name_range = f"_{date_from or 'start'}_to_{date_to or 'end'}"
-    filename = f"photos_backup{name_range}_{ts}.zip"
+        data = buf.getvalue()
+        buf.close()
+        logger.info(f"[backup] zip bytes={len(data)} added={added} missing={missing}")
 
-    resp = send_file(buf, mimetype="application/zip",
-                     as_attachment=True, download_name=filename)
-    # 把統計放到 header，前端可以顯示
-    resp.headers["X-Backup-Count"]   = str(added)
-    resp.headers["X-Backup-Missing"] = str(missing)
-    resp.headers["X-Backup-Orders"]  = str(len(per_order_seq))
-    return resp
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name_range = ""
+        if date_from or date_to:
+            name_range = f"_{date_from or 'start'}_to_{date_to or 'end'}"
+        filename = f"photos_backup{name_range}_{ts}.zip"
+
+        resp = Response(data, mimetype="application/zip")
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp.headers["Content-Length"]      = str(len(data))
+        resp.headers["X-Backup-Count"]      = str(added)
+        resp.headers["X-Backup-Missing"]    = str(missing)
+        resp.headers["X-Backup-Orders"]     = str(len(per_order_seq))
+        # 讓前端 JS 讀得到這些自訂 header（CORS 環境）
+        resp.headers["Access-Control-Expose-Headers"] = \
+            "Content-Disposition, X-Backup-Count, X-Backup-Missing, X-Backup-Orders"
+        return resp
+    except Exception as e:
+        logger.exception("[backup] fatal error")
+        return jsonify({"error": f"備份失敗：{type(e).__name__}: {e}"}), 500
 
 
 # ══════════════════════════════════════════════════════════════
