@@ -1043,13 +1043,13 @@ def export_excel():
         for item in items:
             records.append({
                 "工單號":       d["order_id"],
-                "配件ID":       acc_map.get(item, ""),
-                "配件":         item,
                 "車牌":         d["car_no"] or "",
                 "車型":         d["car_type"] or "",
                 "引擎號":       d["engine_no"] or "",
                 "來源":         d["source"] or "",
                 "地點":         d["location"] or "",
+                "配件ID":       acc_map.get(item, ""),
+                "配件":         item,
                 "安裝日期":     d["install_date"] or "",
                 "到車日":       d["arrival_date"] or "",
                 "交車日":       d["delivery_date"] or "",
@@ -1065,7 +1065,7 @@ def export_excel():
             })
 
     df = pd.DataFrame(records, columns=[
-        "工單號","配件ID","配件","車牌","車型","引擎號","來源","地點",
+        "工單號","車牌","車型","引擎號","來源","地點","配件ID","配件",
         "安裝日期","到車日","交車日","狀態","技師姓名","備註","退回/作廢原因",
         "到場時間","完工時間","審核人員","審核時間","建立時間"
     ])
