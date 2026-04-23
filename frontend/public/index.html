@@ -778,6 +778,24 @@ textarea { min-height:70px; resize:vertical; }
 
 <div id="toast"></div>
 
+<!-- 備份下載進度 Modal -->
+<div id="bk-progress-mask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:22px 24px;min-width:340px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px" id="bk-progress-title">備份下載中…</div>
+    <div style="font-size:12px;color:#666;margin-bottom:12px" id="bk-progress-sub">準備中…</div>
+    <div style="height:10px;background:#eef0f5;border-radius:6px;overflow:hidden">
+      <div id="bk-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f7cff,#6ea0ff);transition:width .2s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-top:6px">
+      <span id="bk-progress-pct">0%</span>
+      <span id="bk-progress-size">0 / 0 MB</span>
+    </div>
+    <div style="text-align:right;margin-top:14px">
+      <button class="btn" onclick="bkCancelDownload()" id="bk-progress-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = window.location.origin;
 let AUTH_TOKEN = localStorage.getItem('auth_token') || '';
@@ -919,7 +937,20 @@ function nav(view, el){
   if(view==='accessories') loadAccessories();
   if(view==='settings') loadSettings();
   if(view==='accounts') loadAccounts();
+  if(view==='gallery') initGalleryDefaults();
   if(view==='order-detail') { /* loaded by openOrderDetail */ }
+}
+
+function initGalleryDefaults(){
+  const df = document.getElementById('bk-date-from');
+  const dt = document.getElementById('bk-date-to');
+  if(df && !df.value){
+    const d = new Date(); d.setDate(d.getDate()-6);
+    df.value = d.toISOString().slice(0,10);
+  }
+  if(dt && !dt.value){
+    dt.value = new Date().toISOString().slice(0,10);
+  }
 }
 
 function headers(){ return {'Content-Type':'application/json','X-Admin-Token':AUTH_TOKEN}; }
@@ -1145,6 +1176,31 @@ function backupClearDates(){
   document.getElementById('bk-include-sig').checked=false;
 }
 
+let _bkAbortCtrl = null;
+function bkCancelDownload(){
+  if(_bkAbortCtrl){ try{ _bkAbortCtrl.abort(); }catch(e){} }
+  bkHideProgress();
+}
+function bkShowProgress(title){
+  document.getElementById('bk-progress-title').textContent = title || '備份下載中…';
+  document.getElementById('bk-progress-sub').textContent = '準備中…';
+  document.getElementById('bk-progress-bar').style.width = '0%';
+  document.getElementById('bk-progress-pct').textContent = '0%';
+  document.getElementById('bk-progress-size').textContent = '0 / 0 MB';
+  document.getElementById('bk-progress-mask').style.display = 'flex';
+}
+function bkHideProgress(){
+  document.getElementById('bk-progress-mask').style.display = 'none';
+}
+function bkUpdateProgress(loaded, total, extra){
+  const mb = b => (b/1024/1024).toFixed(1);
+  const pct = total ? Math.min(100, Math.round(loaded/total*100)) : 0;
+  document.getElementById('bk-progress-bar').style.width = pct + '%';
+  document.getElementById('bk-progress-pct').textContent = total ? pct+'%' : '下載中…';
+  document.getElementById('bk-progress-size').textContent = total ? `${mb(loaded)} / ${mb(total)} MB` : `${mb(loaded)} MB`;
+  if(extra) document.getElementById('bk-progress-sub').textContent = extra;
+}
+
 async function backupPhotos(){
   const df = document.getElementById('bk-date-from').value;
   const dt = document.getElementById('bk-date-to').value;
@@ -1155,32 +1211,73 @@ async function backupPhotos(){
   if(sig) p.set('include_signature','1');
 
   const rangeMsg = (df||dt) ? `${df||'最早'} ~ ${dt||'最新'}` : '全部歷史照片';
-  toast(`備份中：${rangeMsg}…`);
+
+  // 先預覽數量
+  bkShowProgress('準備備份…');
+  document.getElementById('bk-progress-sub').textContent = `查詢範圍：${rangeMsg}`;
 
   try{
-    // fetch 以便抓取 response header 的統計資訊
-    const res = await fetch(`${API}/api/gallery/backup?${p}`, { headers: headers() });
+    const pv = await fetch(`${API}/api/gallery/backup/preview?${p}`, { headers: headers() });
+    if(pv.ok){
+      const d = await pv.json();
+      if((d.count||0) === 0){
+        bkHideProgress();
+        toast('此範圍內沒有照片', false);
+        return;
+      }
+      document.getElementById('bk-progress-sub').textContent =
+        `範圍：${rangeMsg}｜${d.orders||0} 張工單、${d.count||0} 張照片 — 伺服器打包中，請稍候…`;
+    }
+  }catch(e){ /* preview 失敗就繼續 */ }
+
+  _bkAbortCtrl = new AbortController();
+  try{
+    const res = await fetch(`${API}/api/gallery/backup?${p}`, {
+      headers: headers(),
+      signal: _bkAbortCtrl.signal
+    });
     if(!res.ok){
       const err = await res.json().catch(()=>({error:`下載失敗 (${res.status})`}));
-      toast(err.error||'下載失敗', false);
+      bkHideProgress();
+      toast(err.error||`下載失敗 (${res.status})`, false);
       return;
     }
     const count   = res.headers.get('X-Backup-Count')   || '0';
     const missing = res.headers.get('X-Backup-Missing') || '0';
     const orders  = res.headers.get('X-Backup-Orders')  || '0';
-    // 觸發下載
-    const blob = await res.blob();
+    const totalStr= res.headers.get('Content-Length');
+    const total   = totalStr ? parseInt(totalStr,10) : 0;
     const cd = res.headers.get('Content-Disposition')||'';
     const m  = cd.match(/filename="?([^";]+)/i);
     const filename = m ? decodeURIComponent(m[1]) : `photos_backup_${Date.now()}.zip`;
+
+    // 串流讀取 + 進度更新
+    const reader = res.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    document.getElementById('bk-progress-sub').textContent =
+      `下載中：${orders} 張工單、${count} 張照片${missing!=='0'?`（缺檔 ${missing}）`:''}`;
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      chunks.push(value);
+      loaded += value.length;
+      bkUpdateProgress(loaded, total);
+    }
+    const blob = new Blob(chunks, {type:'application/zip'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click();
     setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+    bkHideProgress();
     toast(`✅ 下載完成：${orders} 張工單、${count} 張照片${missing!=='0'?`（缺檔 ${missing}）`:''}`);
   }catch(e){
-    toast('備份失敗：'+e.message, false);
+    bkHideProgress();
+    if(e.name === 'AbortError') toast('已取消下載', false);
+    else toast('備份失敗：'+e.message, false);
+  }finally{
+    _bkAbortCtrl = null;
   }
 }
 

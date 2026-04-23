@@ -911,6 +911,34 @@ def serve_photo(filename):
 # ══════════════════════════════════════════════════════════════
 #  API — 圖庫備份（依上傳日期區間，照片改名為 工單號_序號）
 # ══════════════════════════════════════════════════════════════
+@app.route("/api/gallery/backup/preview")
+@require_token
+def gallery_backup_preview():
+    """預先查詢指定日期區間內可備份的筆數（供前端顯示進度條與估算）"""
+    try:
+        date_from = request.args.get("date_from", "").strip()
+        date_to   = request.args.get("date_to", "").strip()
+        include_sig = request.args.get("include_signature", "0") == "1"
+
+        db = get_db()
+        conds, params = [], []
+        if date_from:
+            conds.append("DATE(uploaded_at) >= ?"); params.append(date_from)
+        if date_to:
+            conds.append("DATE(uploaded_at) <= ?"); params.append(date_to)
+        if not include_sig:
+            conds.append("photo_type != 'signature'")
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        row = db.execute(
+            f"SELECT COUNT(*) AS c, COUNT(DISTINCT order_id) AS o FROM photos {where}",
+            params
+        ).fetchone()
+        return jsonify({"count": row["c"], "orders": row["o"]})
+    except Exception as e:
+        logger.exception("[backup-preview] error")
+        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+
+
 @app.route("/api/gallery/backup")
 @require_token
 def gallery_backup():
@@ -921,6 +949,8 @@ def gallery_backup():
       - date_to   (YYYY-MM-DD)  optional，結束上傳日
       - include_signature=0/1   optional，預設 0（不含簽名圖）
     """
+    import tempfile
+    tmp_path = None
     try:
         date_from = request.args.get("date_from", "").strip()
         date_to   = request.args.get("date_to", "").strip()
@@ -937,19 +967,20 @@ def gallery_backup():
         where = ("WHERE " + " AND ".join(conds)) if conds else ""
         sql = (f"SELECT order_id, filename, photo_type, uploaded_at "
                f"FROM photos {where} ORDER BY order_id, id")
-        logger.info(f"[backup] query: {sql}  params={params}")
+        logger.info(f"[backup] query: {sql} params={params}")
         rows = db.execute(sql, params).fetchall()
-        logger.info(f"[backup] photo rows = {len(rows)}; UPLOAD_FOLDER = {UPLOAD_FOLDER}")
+        logger.info(f"[backup] rows={len(rows)} UPLOAD_FOLDER={UPLOAD_FOLDER} exists={os.path.isdir(UPLOAD_FOLDER)}")
 
         if not rows:
             return jsonify({"error": "指定區間內沒有照片可備份"}), 404
 
-        # 建立 ZIP 於記憶體
-        buf = io.BytesIO()
+        # 建立 ZIP 到暫存檔（避免大批量照片時 OOM）
+        fd, tmp_path = tempfile.mkstemp(suffix=".zip", prefix="photos_backup_")
+        os.close(fd)
         added = 0
         missing = 0
-        per_order_seq = {}   # order_id -> current sequence
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        per_order_seq = {}
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             for r in rows:
                 fname = r["filename"] or ""
                 src = os.path.join(UPLOAD_FOLDER, os.path.basename(fname))
@@ -978,9 +1009,8 @@ def gallery_backup():
             )
             zf.writestr("_README.txt", summary.encode("utf-8"))
 
-        data = buf.getvalue()
-        buf.close()
-        logger.info(f"[backup] zip bytes={len(data)} added={added} missing={missing}")
+        total_bytes = os.path.getsize(tmp_path)
+        logger.info(f"[backup] zip size={total_bytes} added={added} missing={missing}")
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         name_range = ""
@@ -988,18 +1018,33 @@ def gallery_backup():
             name_range = f"_{date_from or 'start'}_to_{date_to or 'end'}"
         filename = f"photos_backup{name_range}_{ts}.zip"
 
-        resp = Response(data, mimetype="application/zip")
+        captured = {"path": tmp_path}
+        def generate():
+            try:
+                with open(captured["path"], "rb") as f:
+                    while True:
+                        chunk = f.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                try: os.remove(captured["path"])
+                except Exception: pass
+
+        resp = Response(generate(), mimetype="application/zip")
         resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-        resp.headers["Content-Length"]      = str(len(data))
+        resp.headers["Content-Length"]      = str(total_bytes)
         resp.headers["X-Backup-Count"]      = str(added)
         resp.headers["X-Backup-Missing"]    = str(missing)
         resp.headers["X-Backup-Orders"]     = str(len(per_order_seq))
-        # 讓前端 JS 讀得到這些自訂 header（CORS 環境）
         resp.headers["Access-Control-Expose-Headers"] = \
-            "Content-Disposition, X-Backup-Count, X-Backup-Missing, X-Backup-Orders"
+            "Content-Disposition, Content-Length, X-Backup-Count, X-Backup-Missing, X-Backup-Orders"
         return resp
     except Exception as e:
         logger.exception("[backup] fatal error")
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except Exception: pass
         return jsonify({"error": f"備份失敗：{type(e).__name__}: {e}"}), 500
 
 
